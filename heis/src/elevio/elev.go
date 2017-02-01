@@ -1,5 +1,9 @@
 package elevio
 
+import (
+	"log"
+)
+
 const N_BUTTONS = 3
 const N_FLOORS = 4
 const DEFAULT_MOTOR_SPEED = 2800

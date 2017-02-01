@@ -1,20 +1,26 @@
 package elevdriver
 
+<<<<<<< HEAD
 import ."elev"
+=======
+import ."elevio/elevio"
+>>>>>>> 780ec1bffb1eae48d17203dde79adf13d6837432
 
 var state int 
-const IDLE = 0
-const GOING_UP = 1
-const GOING_DOWN = -1
+const (
+	DIR_STOP = 0
+	DIR_UP = 1
+	DIR_DOWN = -1
+)
 
 type ButtonFunction int
 
 const (
 	Up ButtonFunction = iota 
-	Down ButtonFunction
-	Command ButtonFunction
-	Stop ButtonFunction
-	Obstruction ButtonFunction
+	Down
+	Command
+	Stop
+	Obstruction
 )
 
 type Button struct {
@@ -30,18 +36,25 @@ type Light struct {
 }
 
 type Status struct {
-	currentFloor int
-	direction int
-	running bool
-	buttons bool [][]
-	door open bool
+	CurrentFloor int
+	Dir int
+	Running	bool
+	Door bool
 }
 
 
 func driverInit() {
 	elevInit()
 	elevMotorDirection(0)
+<<<<<<< HEAD
 	dire = idle
+=======
+	state = IDLE
+}
+
+func setLights(buttons) {
+
+>>>>>>> 780ec1bffb1eae48d17203dde79adf13d6837432
 }
 
 func run() {
@@ -58,6 +71,7 @@ func setIdle() {
 }
 
 func getStatus(statusChan) {
+	
 
 }
 
