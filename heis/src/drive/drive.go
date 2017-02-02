@@ -1,6 +1,8 @@
 package elevdriver
 
-import ."elev"
+import(
+."../elevio"
+)
 
 const(
 DIR_UP = 0
@@ -16,39 +18,48 @@ type StatusType struct {
 	doorOpen bool
 }
 
-type Order struct {
+type OrderType struct {
 	Floor int
 	Direction int
 }
 
 
 var (
-orderList [][] bool
+orderList [][] bool //rows = floors, columns = button number
 status StatusType
 previousFloor int
 )
 
-func drive(downChan chan int, upChan chan int, statusChan chan Status, numFloors int) {
+func drive(downChan chan int, upChan chan int, statusChan chan status, numFloors int) {
 	driveInit(numFloors)
 	for {
-		for() {//(anything in downChan)
-			Order := <- downChan
-			orderList[Order.Floor][Order.Direction] = true //Fetch orders and place in order list
+		//Get all orders from downChan and place in orderList
+		ordersInChannel := true
+		for(ordersInChannel){
+			select{
+				case Order := <- downChan:
+					orderList[Order.Floor][Order.Direction] = true
+				default:
+					ordersInChannel = false
+				}
 		}
-		//Check floor and see if should stop here or move on
-		Status.currentFloor = elevGetFloorSensorSignal()
-		if(Status.currentFloor == -1){
-			//Do nothing
+		//Check floor and see if elev should stop here, move oin either direction or stay put
+		status.currentFloor = elevGetFloorSensorSignal()
+		if(status.currentFloor == -1){
+			if(status.running == false) {
+				run(up)
+			}
+			//Between floors - make this run up/down if not running to handle restarts?
 		} 
-		else if(orderList[Status.currentFloor][Status.direction] == true || orderList[Status.currentFloor][DIR_NODIR] == true) { //order to stop here: stop here
+		else if(orderList[status.currentFloor][status.direction] == true || orderList[status.currentFloor][DIR_NODIR] == true) { //order to stop here: stop here
 			stopRoutine()
 		} 
-		else if(Status.running == false) {
-			if(Status.direction == DIR_DOWN) {
-				if(checkOrdersBelow(Status.currentFloor) == true) {
+		else if(status.running == false) {
+			if(status.direction == DIR_DOWN) {
+				if(checkOrdersBelow(status.currentFloor) == true) {
 					run(DIR_DOWN)
 				}
-				else if(checkOrdersAbove(Status.currentFloor) == true ){
+				else if(checkOrdersAbove(status.currentFloor) == true ){
 					run(DIR_UP)
 				}
 				else {
@@ -78,9 +89,9 @@ func driveInit(numFloors int) { //add find floor sequence
 	status.running = false
 	status.
 	status.direction = DIR_NODIR
-	for i := 0; i < numFloors; i++ {
-		for j := 0; j < 3; j++ {
-			orderList[i][j] = false
+	for floor := 0; floor < numFloors; i++ {
+		for dir := 0; dir < 3; j++ {
+			orderList[floor][dir] = false
 		}
 		
 	}
@@ -88,20 +99,24 @@ func driveInit(numFloors int) { //add find floor sequence
 
 func stopRoutine() {
 	elevMotorDirection(0)
-	Status.running = false
+	status.running = false
 	elevDoorOpenLight(1)
-	Status.doorOpen = true
+	status.doorOpen = true
 
-	orderList[Status.currentFloor][Status.direction] = false
-	orderList[Status.currentFloor][DIR_NODIR] = false
-	Order := {Status.currentFloor, Status.direction} //Ganske sikker på at dette er feil
+	orderList[status.currentFloor][status.direction] = false
+	orderList[status.currentFloor][DIR_NODIR] = false
+
+	var Order OrderType
+	Order.Floor = status.currentFloor
+	Order.Direction = status.direction
 	upChan <- Order
 
 	//Timer = 2 sec - problem if this go routine is stuck here? mtp fetch orders
 
 	elevDoorOpenLight(0)
-	Status.doorOpen = false
+	status.doorOpen = false
 }
+
 func run(dir int) {
 	elevMotorDirection(dir)
 	status.direction = dir
@@ -113,30 +128,28 @@ func run(dir int) {
 	}
 }
 
-func checkOrdersAbove(int floor) {
-	for i := floor; i < numFloors; i++ {
-		for j := 0; j < 3; j++ {
-			if (orderList[i][j] == true) {
+func checkOrdersAbove(int currentFloor) {
+	for floor := currentFloor; floor < numFloors; floor++ {
+		for button := 0; button < 3; button++ {
+			if (orderList[floor][button] == true) {
 				return true
 			}
 		}
-		
 	}
 	return false
 }
 
-func checkOrdersBelow(int floor) {
-	for i := 0; i < floor; i++ {
-		for j := 0; j < 3; j++ {
-			if (orderList[i][j] == true) {
+func checkOrdersBelow(int currentFloor) {
+	for floor := 0; floor < currentFloor; floor++ {
+		for button := 0; button < 3; button++ {
+			if(orderList[floor][button] == true) {
 				return true
 			}
 		}
-		
 	}
 	return false
 }
 
-func getDriveStatus(){
-
+func GetDrivestatus(){
+	return status
 }
