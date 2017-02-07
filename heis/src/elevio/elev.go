@@ -58,7 +58,7 @@ type Status struct {
 }
 */
 
-func elevInit() {
+func ElevInit() int { //returns number of floors
 	if initialized { //for at den ikke skal initialiseres fra flere steder
 		return
 	}
@@ -77,9 +77,10 @@ func elevInit() {
 	elevDoorOpenLight(false)
 	elevFloorIndicator(0)
 	initialized = true
+	return N_FLOORS
 }
 
-func elevMotorDirection(dir int) {
+func ElevMotorDirection(dir int) {
 	if dir == 0 {
 		ioWriteAnalog(MOTOR, 0)
 	}
@@ -93,7 +94,7 @@ func elevMotorDirection(dir int) {
 	}
 }
 
-func changeMotorSpeed(speed int) int
+func ChangeMotorSpeed(speed int) int
 {
 	if(speed <= 0) {
 		return motorSpeed
@@ -110,7 +111,7 @@ func changeMotorSpeed(speed int) int
 	}
 }
 
-func elevSetLight(light Light) {
+func ElevSetLight(light Light) {
 	switch light.Type {
 		case Up: fallthrough
 		case Down: fallthrough
@@ -154,7 +155,7 @@ func elevSetLight(light Light) {
 	
 }
 
-func elevGetButtonSignal(button Button) Button {
+func ElevGetButtonSignal(button Button) Button {
 	switch button.Type {
 		case Up: fallthrough
 		case Down: fallthrough
@@ -182,7 +183,7 @@ func elevGetButtonSignal(button Button) Button {
 }
 
 
-func elevSetFloorIndicator(floor int) {
+func ElevSetFloorIndicator(floor int) {
 	if (floor < 0 || floor >= N_FLOORS) {
 		log.Fatal("floor out of range")
 	}
@@ -202,7 +203,7 @@ func elevSetFloorIndicator(floor int) {
 	}
 }
 
-func elevGetFloorSensorSignal() int {
+func ElevGetFloorSensorSignal() int {
 	if ioReadBit(SENSOR_FLOOR1) {
 		return 0
 	}

@@ -1,6 +1,6 @@
 package elevdriver
 
-import ."./src/elev"
+import "./src/elevio"
 
 /*
 1. check if any buttons are pressed
@@ -28,6 +28,15 @@ type Light struct {
 	On 		bool
 }
 
-func buttonInterface(downChan chan, upChan chan) {
+var externalOrderList [][] Button
+
+func init() {
+	nFloors := elevio.ElevInit()
+
+
+}
+
+func ButtonInterface(downChan chan, upChan chan) {
+	init()
 	
 }
