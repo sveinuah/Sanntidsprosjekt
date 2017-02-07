@@ -21,12 +21,12 @@ func intToBool(i int) bool {
 }
 
 func ioInit() bool {
-	n, err := C.io_init()
+	initErr, err := C.io_init()
 
 	if err != nil {
 		log.Fatal("Initialization error of the C driver. Error: ", err)
 	}
-	return intToBool(n)
+	return intToBool(initErr)
 }
 
 func ioSetBit(channel int) {
