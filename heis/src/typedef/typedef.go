@@ -11,3 +11,14 @@ type UnitType struct {
 	IP   string
 	Port string
 }
+
+type OrderPackage struct {
+	Order OrderType
+	Unit  UnitType
+}
+
+const (
+	DIR_UP    = 0
+	DIR_DOWN  = 1
+	DIR_NODIR = 2
+)

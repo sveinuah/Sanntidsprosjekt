@@ -6,16 +6,21 @@ import (
 
 const N_BUTTONS = 3
 const N_FLOORS = 4
+const N_STATUS_BUTTONS = 3
 const DEFAULT_MOTOR_SPEED = 2800
 const MAX_SPEED = 4000
 
 var motorSpeed = DEFAULT_MOTOR_SPEED
 
-var lightMatrix [N_FLOORS][N_BUTTONS] int = {
+var buttonLightMatrix [N_FLOORS][N_BUTTONS] int = {
 	{LIGHT_UP1, LIGTH_DOWN1, LIGHT_COMMAND1},
 	{LIGHT_UP2, LIGTH_DOWN2, LIGHT_COMMAND2},
 	{LIGHT_UP3, LIGHT_DOWN3, LIGHT_COMMAND3},
-	{LIGHT_UP4, LIGHT_DOWN4, LIGHT_COMMAND4}
+	{LIGHT_UP4, LIGHT_DOWN4, LIGHT_COMMAND4},
+}
+
+var statusLightVector [N_STATUS_BUTTONS] int = {
+	STOP,OBSTRUCTION,LIGHT_DOOR_OPEN
 }
 
 var buttonMatrix [N_FLOORS][N_BUTTONS] int = {
@@ -25,7 +30,7 @@ var buttonMatrix [N_FLOORS][N_BUTTONS] int = {
     {BUTTON_UP4, BUTTON_DOWN4, BUTTON_COMMAND4},
 }
 
-func elevInit() {
+func elevInit() int {
 	success := ioInit()
 	if success == false {
 		log.Fatal("Unable to initialize elevator hardware")
@@ -40,9 +45,8 @@ func elevInit() {
 	elevStopLight(false)
 	elevDoorOpenLight(false)
 	elevFloorIndicator(0)
+	return N_FLOORS
 }
-
-//Legger inn søknad om å endre denne til up:0, down:1, nodir:2 slik som resten
 
 func elevMotorDirection(dir int) {
 	if dir == DIR_NODIR {
@@ -57,21 +61,7 @@ func elevMotorDirection(dir int) {
 		ioWriteAnalog(MOTOR,motorSpeed)
 	}
 }
-/*
-func elevMotorDirection(dir int) {
-	if dir == 0 {
-		ioWriteAnalog(MOTOR, 0)
-	}
-	else if dir > 0 {
-		ioClearBit(MOTORDIR)
-		ioWriteAnalog(MOTOR,motorSpeed)
-	}
-	else {
-		ioSetBit(MOTORDIR)
-		ioWriteAnalog(MOTOR,motorSpeed)
-	}
-}
-*/
+
 func changeMotorSpeed(speed int) int
 {
 	if(speed <= 0) {

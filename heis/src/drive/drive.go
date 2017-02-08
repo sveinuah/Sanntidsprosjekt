@@ -5,11 +5,7 @@ import(
 "time"
 )
 
-const(
-DIR_UP = 0
-DIR_DOWN = 1
-DIR_NODIR = 2
-)
+
 
 type StatusType struct {
 	currentFloor int
@@ -18,13 +14,6 @@ type StatusType struct {
 	buttons bool [][]
 	doorOpen bool
 }
-
-type OrderType struct {
-	Floor int
-	Direction int
-	Argument bool
-}
-
 
 var (
 orderList [][] bool //rows = floors, columns = direction 
@@ -40,7 +29,7 @@ func drive(downChan chan OrderType, upChan chan OrderType, statusChan chan Statu
 		for(ordersInChannel){
 			select{
 				case order := <- downChan:
-					orderList[Order.Floor][order.Direction] = order.Argument
+					orderList[Order.Floor][order.Dir] = order.Arg
 				default:
 					ordersInChannel = false
 				}
@@ -49,35 +38,28 @@ func drive(downChan chan OrderType, upChan chan OrderType, statusChan chan Statu
 		tempFloor := elevGetFloorSensorSignal()
 		if(tempFloor == -1 && status.running == false){
 			run(up)
-		} 
-		else {
+		} else {
 			if(status.currentFloor != tempFloor) {
 				elevFloorIndicator(tempFloor)
 				status.currentFloor = tempFloor
 			}
 			if(orderList[status.currentFloor][status.direction] == true || orderList[status.currentFloor][DIR_NODIR] == true) { //order to stop here: stop here
 				stopRoutine()
-			} 
-			else {
+			} else {
 				if(status.direction == DIR_DOWN) {
 					if(checkOrdersBelow(status.currentFloor) == true) {
 						run(DIR_DOWN)
-					}
-					else if(checkOrdersAbove(status.currentFloor) == true ){
+					} else if(checkOrdersAbove(status.currentFloor) == true ){
 						run(DIR_UP)
-					}
-					else {
+					} else {
 						run(DIR_NODIR)
 					}
-				} 
-				else {
+				} else {
 					if(checkOrdersAbove(status.currentFloor) == true) {
 						run(DIR_UP)
-					}
-					else if(checkOrdersBelow(status.currentFloor) == true) {
+					} else if(checkOrdersBelow(status.currentFloor) == true) {
 						run(DIR_DOWN)
-					}
-					else {
+					} else {
 						run(DIR_NODIR)
 					}
 				}
@@ -113,7 +95,7 @@ func stopRoutine() { //Make smarter? As is: stop 2 sec, if anyone presses button
 
 	var order OrderType
 	order.Floor = status.currentFloor
-	order.Direction = status.direction
+	order.Dir = status.direction
 	upChan <- order
 
 	time.Sleep(2*time.Second)
