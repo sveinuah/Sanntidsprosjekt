@@ -1,8 +1,9 @@
 package typedef
 
 type OrderType struct {
-	Floor     int
-	Direction int
+	Floor int
+	Dir   int
+	Arg   bool
 }
 
 type UnitType struct {
@@ -15,3 +16,9 @@ type OrderPackage struct {
 	Order OrderType
 	Unit  UnitType
 }
+
+const (
+	DIR_UP    = 0
+	DIR_DOWN  = 1
+	DIR_NODIR = 2
+)

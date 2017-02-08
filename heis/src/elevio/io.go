@@ -14,8 +14,7 @@ import (
 func intToBool(i int) bool {
 	if i == 0 {
 		return false
-	}
-	else {
+	} else {
 		return true
 	}
 }
@@ -30,7 +29,7 @@ func ioInit() bool {
 }
 
 func ioSetBit(channel int) {
-	_, err = := C.io_set_bit(C.int(channel))
+	_, err := C.io_set_bit(C.int(channel))
 
 	if err != nil {
 		log.Fatal("Unable to set bit via C driver. Error: ", err)
