@@ -89,7 +89,7 @@ func changeMotorSpeed(speed int) int
 	}
 }
 
-func elevButtonLight(floor int, button int, val bool) {
+func elevButtonLight(floor int, button int, val bool) { 
 	if (floor < 0 || button < 0 || floor >= N_FLOORS || button >= N_BUTTONS) {
 		log.Fatal("floor/button out of range")
 	}
@@ -99,7 +99,7 @@ func elevButtonLight(floor int, button int, val bool) {
 	}
 	else {
 		ioClearBit(lightMatrix[floor][button])
-	}
+	} 
 }
 
 func elevFloorIndicator(floor int) {
