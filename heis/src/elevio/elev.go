@@ -42,8 +42,6 @@ func elevInit() {
 	elevFloorIndicator(0)
 }
 
-//Legger inn søknad om å endre denne til up:0, down:1, nodir:2 slik som resten
-
 func elevMotorDirection(dir int) {
 	if dir == DIR_NODIR {
 		ioWriteAnalog(MOTOR, 0)
@@ -57,21 +55,7 @@ func elevMotorDirection(dir int) {
 		ioWriteAnalog(MOTOR,motorSpeed)
 	}
 }
-/*
-func elevMotorDirection(dir int) {
-	if dir == 0 {
-		ioWriteAnalog(MOTOR, 0)
-	}
-	else if dir > 0 {
-		ioClearBit(MOTORDIR)
-		ioWriteAnalog(MOTOR,motorSpeed)
-	}
-	else {
-		ioSetBit(MOTORDIR)
-		ioWriteAnalog(MOTOR,motorSpeed)
-	}
-}
-*/
+
 func changeMotorSpeed(speed int) int
 {
 	if(speed <= 0) {
