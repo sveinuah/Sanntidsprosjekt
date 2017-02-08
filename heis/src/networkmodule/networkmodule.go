@@ -1,7 +1,7 @@
 package networkmodule
 
 import (
-	"../typedef/"
+	. "../typedef/"
 	"./conn"
 	"encoding/json"
 	"fmt"
@@ -12,9 +12,8 @@ import (
 )
 
 var globalTCPReceivePort = "20014"
-var localTCPReceivePort = "30014"
 
-func TransmitTCP(targetUnit typedef.UnitType, chans ...interface{}) {
+func TransmitTCP(Target chan UnitType, chans ...interface{}) {
 	checkArgs(chans...)
 
 	n := 0

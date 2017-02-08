@@ -11,6 +11,7 @@ type UnitType struct {
 	IP   string
 	Port string
 }
+<<<<<<< HEAD
 
 type OrderPackage struct {
 	Order OrderType
@@ -22,3 +23,5 @@ const (
 	DIR_DOWN  = 1
 	DIR_NODIR = 2
 )
+=======
+>>>>>>> 915f7ffd456e7a492b4d83767c964dd5cf806f7d
