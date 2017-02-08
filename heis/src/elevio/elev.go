@@ -121,28 +121,14 @@ func ElevSetLight(light Light) {
 				ioClearBit(lightMatrix[light.FLoor][light.type])
 			}
 		}
-		case Stop: {
-			if light.On {
-				ioSetBit(LIGHT_STOP)
-			}
-			else {
-				ioClearBit(LIGHT_STOP)
-			}
-		}
-		case Obstruction: {
-			if light.On {
-				ioSetBit(OBSTRUCTION)
-			}
-			else {
-				ioClearBit(OBSTRUCTION)
-			}
-		}
+		case Stop: fallthrough
+		case Obstruction: fallthrough
 		case Door {
 			if light.On {
-				ioSetBit(LIGHT_DOOR_OPEN)
+				ioSetBit(statusLightVector[ligth.Type])
 			}
 			else {
-				ioClearBit(LIGHT_DOOR_OPEN)
+				ioClearBit(statusLightVector[light.Type])
 			}
 		}
 		default:
