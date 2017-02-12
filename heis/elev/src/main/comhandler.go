@@ -28,7 +28,6 @@ func makeReport()
 
 func main() {
 	//Init - Look at init order?
-	elevInit()
 	netwinint() //Feil navn
 	
 	executedOrdersChan		:= make(chan OrderType, 100)
@@ -36,7 +35,7 @@ func main() {
 	driveStatusChan			:= make(chan StatusType)
 
 	buttonPressesChan		:= make(chan OrderType, 100)
-	extLightsChan				:= make(chan extLightsMatrix)
+	extLightsChan			:= make(chan extLightsMatrix)
 
 	extReportChan			:= make(chan ExtReport)
 

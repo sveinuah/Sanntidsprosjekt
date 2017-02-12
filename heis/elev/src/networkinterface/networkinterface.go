@@ -46,5 +46,4 @@ func main() {
 		dataTxChan <- tPackage
 		time.Sleep(1 * time.Second)
 	}
-
 }

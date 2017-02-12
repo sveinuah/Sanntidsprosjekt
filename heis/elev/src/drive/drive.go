@@ -96,6 +96,8 @@ func stopRoutine() { //Make smarter? As is: stop 2 sec, if anyone presses button
 	var order OrderType
 	order.Floor = status.currentFloor
 	order.Dir = status.direction
+	order.Arg = false
+	//FIX: Send to BI also
 	upChan <- order
 
 	time.Sleep(2*time.Second)

@@ -161,4 +161,5 @@ func elevGetStopSignal() int {
 
 func elevGetObstructionSignal() int {
 	return ioReadBit(OBSTRUCTION)
+>>>>>>> 17634f57215e4e4c8860e86a04cf6d815853a71f:heis/elev/src/elevio/elev.go
 }
