@@ -7,9 +7,11 @@ import (
 
 var lights [][]bool
 
-func buttonInterface(nameforordersthatgotoBIChan chan OrderType, buttonPressesChan chan OrderType, numFloors int) {
-	buttonInterfaceInit(numFloors)
-	for {
+func buttonInterface(clearLightChan chan OrderType, buttonPressesChan chan OrderType, initChan chan int) {
+	numFloors = buttonInterfaceInit(initChan)
+
+	abortFlag := false
+	for abortFlag != true {
 		//Get new button presses and send order up/to drive
 		for floor := 0; floor < numFloors; floor++ {
 			for dir := 0; dir < 3; dir++ {
@@ -17,10 +19,10 @@ func buttonInterface(nameforordersthatgotoBIChan chan OrderType, buttonPressesCh
 					var order OrderType
 					order.Floor = floor
 					order.Dir = dir
-					order.Arg = true
+					order.New = true
 					buttonPressesChan <- order
 					if order.Dir == DIR_NODIR {
-						elevButtonLight(order.Floor, order.Dir, order.Arg)
+						elevButtonLight(order.Floor, order.Dir, order.New)
 						allocatedOrdersChan <- order
 					}
 				}
@@ -43,17 +45,19 @@ func buttonInterface(nameforordersthatgotoBIChan chan OrderType, buttonPressesCh
 		ordersInChannel := true
 		for ordersInChannel {
 			select {
-			case order := <-downChan:
-				elevButtonLight(order.Floor, order.Dir, order.Arg)
-				lights[Order.Floor][order.Dir] = order.Arg
+			case order := <-clearLightChan:
+				elevButtonLight(order.Floor, order.Dir, order.New)
+				lights[Order.Floor][order.Dir] = order.New
 			default:
 				ordersInChannel = false
 			}
 		}
+		abortFlag = checkAbortFlag(abortChan)
 	}
 }
 
-func buttonInterfaceInit() int {
+func buttonInterfaceInit(initChan chan int) int {
+	numFloors := <-initChan
 	//wait for drive to run elevInit, return numFloors
 	for floor := 0; floor < numFloors; floor++ {
 		for dir := 0; dir < 3; dir++ {

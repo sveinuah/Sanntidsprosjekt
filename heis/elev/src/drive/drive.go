@@ -1,43 +1,37 @@
 package elevdriver
 
 import(
+."../typedef"
 ."../elevio"
 "time"
 )
 
-
-
-type StatusType struct {
-	currentFloor int
-	direction int
-	running bool
-	buttons bool [][]
-	doorOpen bool
-}
-
 var (
 orderList [][] bool //rows = floors, columns = direction 
 status StatusType
-previousFloor int
+numFloors int
 )
 
-func drive(downChan chan OrderType, upChan chan OrderType, statusChan chan StatusType, numFloors int) {
-	driveInit(numFloors)
-	for {
-		//Get all orders from downChan and place in orderList
+func drive(allocateOrdersChan chan OrderType, executedOrdersChan chan OrderType, setLightsChan chan OrderType, elevStatusChan chan StatusType, intChan chan StatusType) {
+	driveInit()
+	abortFlag := false
+	for abortFlag != true{
+		//Get all orders from allocateOrdersChan and place in orderList
 		ordersInChannel := true
 		for(ordersInChannel){
 			select{
-				case order := <- downChan:
-					orderList[Order.Floor][order.Dir] = order.Arg
+				case order := <- allocateOrdersChan:
+					orderList[Order.Floor][order.Dir] = order.New
 				default:
 					ordersInChannel = false
 				}
 		}
 		//Check floor and see if elev should stop here, move in either direction or stay put
 		tempFloor := elevGetFloorSensorSignal()
-		if(tempFloor == -1 && status.running == false){
-			run(up)
+		if(tempFloor == -1){
+			if(status.running == false){
+				run(up)
+			}
 		} else {
 			if(status.currentFloor != tempFloor) {
 				elevFloorIndicator(tempFloor)
@@ -65,13 +59,19 @@ func drive(downChan chan OrderType, upChan chan OrderType, statusChan chan Statu
 				}
 			}
 		}
+		//Update status struct
+		<- intStatusChan
+		intStatusChan <- status
+		
+		abortFlag = checkAbortFlag(abortChan)
 	}
 }
 
 
 
-func driveInit(numFloors int) { //add find floor sequence
-	//elevInit() should be called from Comm. Handler?
+func driveInit(numFloors int) {
+	numFloors = elevInit() should be called from Comm. Handler?
+	initChan <- numFloors
 	elevMotorDirection(0)
 	status.running = false
 	status.currentFloor = elevGetFloorSensorSignal()
@@ -84,25 +84,40 @@ func driveInit(numFloors int) { //add find floor sequence
 	}
 }
 
-func stopRoutine() { //Make smarter? As is: stop 2 sec, if anyone presses button: 2 sec more (but not 2 sec x buttonpresses)
-	elevMotorDirection(0)
+func stopRoutine() { 
+	elevMotorDirection(false)
 	status.running = false
-	elevDoorOpenLight(1)
+	elevDoorOpenLight(true)
 	status.doorOpen = true
 
-	orderList[status.currentFloor][status.direction] = false
-	orderList[status.currentFloor][DIR_NODIR] = false
+	//If idle and called by external button: set direction this way
+	if(status.direction == DIR_NODIR){
+		if(orderList[status.currentFloor][DIR_UP] == true){
+			status.direction = DIR_UP
+		} else if(orderList[status.currentFloor][DIR_DOWN] == true){
+			status.direction = DIR_DOWN
+		}
+	}
 
-	var order OrderType
+	var order OrderType //Make clear order
 	order.Floor = status.currentFloor
 	order.Dir = status.direction
-	order.Arg = false
-	//FIX: Send to BI also
-	upChan <- order
+	order.New = false
 
-	time.Sleep(2*time.Second)
+	setLightChan <- order
+	orderList[status.currentFloor][status.direction] = false //Clear orders from list
 
-	elevDoorOpenLight(0)
+	//If external order: Report to master and clear internal order aswell
+	if(status.direction != DIR_NODIR){
+		executedOrdersChan <- order
+		order.Dir = DIR_NODIR
+		setLightChan <- order 
+		orderList[status.currentFloor][DIR_NODIR] = false
+	}
+
+	time.Sleep(2*time.Second) //Make smarter wait time??
+
+	elevDoorOpenLight(false)
 	status.doorOpen = false
 }
 
@@ -142,8 +157,4 @@ func checkOrdersBelow(int currentFloor) {
 		}
 	}
 	return false
-}
-
-func GetDrivestatus(){ //Make status exclusivly acessible? Or pass status up through main drive goroutine?
-	return status
 }
