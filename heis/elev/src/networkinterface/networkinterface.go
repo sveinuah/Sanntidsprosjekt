@@ -1,35 +1,50 @@
 package networkinterface
 
 import (
-	"../networkmodule"
-	. "../typedef"
+	"../typedef"
+	"./UdpNI"
+	"fmt"
+	"strconv"
+	"time"
 )
 
-var OrderChan := make(chan, UnitType)
+func main() {
 
-func NetworkInit() {
+	dataRxChan := make(chan typedef.DataPackage, 3)
+	dataTxChan := make(chan typedef.DataPackage, 3)
+	port := ":20014"
 
-	OrderChan := make(chan, OrderType)
-	TargetChan := make(chan, UnitType)
+	go UdpNI.UDPListenAndReceive(port, dataRxChan)
+	go UdpNI.UDPTransmit(dataTxChan)
 
-	go networkmodule.TransmitTCP(TargetChan, OrderChan)
-	go networkmodule.ReceiveTCP(OrderChan)
-	
-	go networkmodule.TransmitTCP(TargetChan, StatusChan)
-
-	ẗarget := UnitType{0,"129.241.187.43","34933"}
+	var rPackage typedef.DataPackage
 
 	go func() {
-		order := OrderType{0,0};
-		for{
-			order.Floor++
-			if order.Dir != 0 {
-				order.Dir = 0
-			} else order.Dir = 1
-			TargetChan <- target
-			OrderChan <- order
+		for {
+			select {
+			case rPackage = <-dataRxChan:
+				fmt.Println(string(rPackage.Data) + " From: " + rPackage.IP + ":" + rPackage.Port)
+			default:
+				fmt.Println("Nothing to report..")
+			}
+			time.Sleep(1 * time.Second)
 		}
+	}()
+
+	var tPackage typedef.DataPackage
+	var iter int
+	var str string
+	tPackage.IP = "127.0.0.1"
+	tPackage.Port = "12000"
+
+	for {
+
+		iter++
+		str = "Test UDP-Transmitter, Iteration: " + strconv.Itoa(iter)
+
+		tPackage.Data = []byte(str)
+		dataTxChan <- tPackage
+		time.Sleep(1 * time.Second)
 	}
+
 }
-
-

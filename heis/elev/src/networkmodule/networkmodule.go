@@ -1,48 +1,61 @@
 package networkmodule
 
 import (
-	"../typedef"
-	"fmt"
+	. "../../typedef"
 	"log"
 	"net"
 	"strings"
-	"time"
 )
 
 func CheckError(err error) {
 	if err != nil {
-		log.Fatal("Error: ", err)
+		log.Fatal(err)
 	}
 }
 
-func InitiateTCPCon(Target chan UnitType, receiveAddress string) (conn net.TCPConn) {
+func UDPListenAndReceive(port string, dataRxChan chan DataPackage) {
 
-	tempAddress := Target.IP + ":" + Target.Port
-	targetAddress, _ := net.ResolveTCPAddr("tcp", tempAddress)
-	localAddress, _ := net.ResolveTCPAddr("tcp", receiveAddress)
-	conn, err := net.DialTCP("tcp", nil, targetAddress)
+	buf := make([]byte, 1024)
+
+	rPackage := new(DataPackage)
+
+	laddr, err := net.ResolveUDPAddr("udp", port)
 	CheckError(err)
 
-	conn.Write([]byte("Connect to:" + receiveAddress + "\x00"))
-
-	ln, err := net.ListenTCP("tcp", localAddress)
+	conn, err := net.ListenUDP("udp", laddr)
 	CheckError(err)
 
-	conn, err = ln.Accept()
-	CheckError(err)
+	defer conn.Close()
 
-	return conn
+	for {
+		n, addr, err := conn.ReadFrom(buf)
+		CheckError(err)
+
+		rPackage.IP = strings.Split(addr.String(), ":")[0]
+		rPackage.Port = strings.Split(addr.String(), ":")[1]
+		rPackage.Data = buf[0:n]
+
+		dataRxChan <- *rPackage
+	}
 }
 
+func UDPTransmit(dataTxChan chan DataPackage) {
 
-func TransmitTCP(connChan chan net.TCPConn, dataChan chan []byte) {
-	for{
+	var tPackage DataPackage
+
+	for {
 		select {
-			case: data <- dataChan
-				conn <- connChan
-				conn.Write(data)
-				break
-			case: 
+		case tPackage = <-dataTxChan:
+
+			tAddr, err := net.ResolveUDPAddr("udp", tPackage.IP+":"+tPackage.Port)
+			CheckError(err)
+			conn, err := net.DialUDP("udp", nil, tAddr)
+			CheckError(err)
+
+			_, err = conn.Write(tPackage.Data)
+			CheckError(err)
+
+		default:
 		}
 	}
 }

@@ -22,3 +22,9 @@ const (
 	DIR_DOWN  = 1
 	DIR_NODIR = 2
 )
+
+type DataPackage struct {
+	IP   string
+	Port string
+	Data []byte
+}
