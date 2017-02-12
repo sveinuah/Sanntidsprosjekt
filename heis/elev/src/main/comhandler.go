@@ -1,68 +1,36 @@
 package main
 
 import (
-	."./typedef"
 	"./elevio/elevio"
-	"./localscheduler/localscheduler"
-	"netinterface"
+	. "./typedef"
 	"log"
+	"netinterface"
 	"time"
 )
 
-type Error struct {
-	ErrCode int
-	ErrStr string
+func makeReport() {
+
 }
-
-type ExtReport struct {
-	Err Error
-	CurrentFloor int 
-	Dir int 
-	Running bool 
-	newOrders [] Order
-	orderMatrix [][] bool
-}
-
-func makeReport()
-
 
 func main() {
-	//Init - Look at init order?
-	netwinint() //Feil navn
-	
-	executedOrdersChan		:= make(chan OrderType, 100)
-	allocatedOrdersChan		:= make(chan OrderType, 100)
-	driveStatusChan			:= make(chan StatusType)
+	allocateOrdersChan := make(chan OrderType, 100)
+	executedOrdersChan := make(chan OrderType, 100)
+	buttonPressesChan := make(chan OrderType, 100)
+	setLightsChan := make(chan OrderType, 100)
+	extLightsChan := make(chan extLightsMatrix, 1)
+	elevStatusChan := make(chan StatusType, 1)
+	initChan := make(chan int, 1)
+	abortChan := make(chan bool, 1)
 
-	buttonPressesChan		:= make(chan OrderType, 100)
-	extLightsChan			:= make(chan extLightsMatrix)
-
-	extReportChan			:= make(chan ExtReport)
-
+	abortFlag := false
+	abortChan <- abort
 	//Pass all as pointers?
-	go drive(allocatedOrdersChan, executedOrdersChan, driveStatusChan, numFloors)
-	go buttonInterface(lightsChan, buttonPressesChan, numFloors)
-	go networkinterface(allocatedOrdersChan, lightsChan, extReportChan)
+	go drive(abortChan, allocateOrdersChan, executedOrdersChan, elevStatusChan, setLightsChan, elevStatusChan, initChan)
+	go buttonInterface(abortChan, extLightsChan, buttonPressesChan, allocateOrdersChan, initChan)
+	go networkinterface(abortChan, allocateOrdersChan, executedOrdersChan, extLightsChan, extReportChan, elevStatusChan)
 
-	for {
-		//get new button presses and executed orders. Add to report, send int orders to drive
-		ordersInChannel := true
-		for(ordersInChannel){
-			select{
-				case order := <-buttonPressesChan:
-					//Add to report
-					if(order.Dir == DIR_NODIR && order.Arg == true) {
-						allocatedOrdersChan <- order
-					}
-				default:
-					ordersInChannel = false
-			}
-		}
-
-		if(beskjed om å sende status) {
-			//send status
-			//
-		}
+	for abort != true {
+		abort = checkAbortFlag(abortChan)
+		//delay?
 	}
 }
-
