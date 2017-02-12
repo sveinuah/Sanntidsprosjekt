@@ -30,6 +30,12 @@ type OrderPackage struct {
 	Unit  UnitType
 }
 
+type DataPackage struct {
+	IP   string
+	Port string
+	Data []byte
+}
+
 type Error struct {
 	ErrCode int
 	ErrStr string
