@@ -26,22 +26,33 @@ type elevatorReport struct {
 	newExtOrders [] Order
 }*/
 
+const (
+	MASTER_SYNC_INTERVALL = (Time.Second * 1)
+)
 
 var active bool
 var unitID int
 var unitList[] UnitType
 
-type stack []Order
-
-func (s stack) Push(o Order) stack {
-	return append(s,o)
+type OrderQueue struct {
+	OrderList []OrderType
+	EmptyError string := "Queue is Empty"
 }
 
-func (s stack) Pop() (stack, Order) {
-	length := len(s)
-	return s[:l-1], s[l-1]
+func (q *OrderQueue) Error() error {
+	return q.EmptyError
+}
 
-	// add error if empty stack
+func (q *OrderQueue) Enqueue(o Order) OrderQueue {
+	return append(q,o)
+}
+
+func (q *OrderQueue) Dequeue() (OrderQueue, OrderType, error) {
+	l := len(q)
+	if l == 0 {
+		return q, nil, q.Error()
+	}
+	return q[1:], q[0], nil
 }
 
 func checkIfActive() {
@@ -57,6 +68,7 @@ func checkIfActive() {
 
 func init(unitStatusChan chan UnitType, masterSync chan []Order) {
 	// broadcast "I'm here" NYI
+	//start network interface w/channels NYI
 
 	timeOut := make(chan bool, 1)
 	go func {
@@ -91,11 +103,23 @@ func unitHandler(unit UnitType) {
 		}
 }
 
+func masterSyncTimer(syncTimer chan bool)
+
 func main() {
-	orderChan = make(chan OrderPackage)
-	unitStatusChan = make(chan UnitType)
-	reportChan = make(chan elevatorReport)
-	masterSync = make(chan [] Order)
+	orderChan := make(chan OrderPackage)
+	unitStatusChan := make(chan UnitType)
+	reportChan := make(chan elevatorReport)
+	masterSync := make(chan orderQueue)
+	syncTimer := make(chan bool,1)
+
+	go func {
+		for {
+			time.Sleep(MASTER_SYNC_INTERVALL)
+			syncTimer <- true
+		}
+	}
+
+	orderQueue := new(orderQueue)
 
 	init()
 
@@ -106,10 +130,13 @@ func main() {
 			case unit := <- unitStatusChan:
 				unitHandler(unit)
 			case order := <- orderChan:
-				//add order to stack
-			}
-			//sync
+				orderQueue.Enqueue(order)
+			case <- syncTimer:
+				masterSync <- orderQueue
+			default:
+			//reports
 			//handleorders
+			}
 
 		case false:
 			select {
