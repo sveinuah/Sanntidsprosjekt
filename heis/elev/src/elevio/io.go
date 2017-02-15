@@ -5,13 +5,12 @@ package elevio
 //#include <comedilib.h>
 //#include "io.h"
 //#include "channels.h"
-
+import "C"
 import (
-	"C"
 	"log"
 )
 
-func intToBool(i int) bool {
+func intToBool(i C.int) bool {
 	if i == 0 {
 		return false
 	} else {
@@ -19,7 +18,7 @@ func intToBool(i int) bool {
 	}
 }
 
-func ioInit() bool {
+func IoInit() bool {
 	initErr, err := C.io_init()
 
 	if err != nil {
@@ -28,7 +27,7 @@ func ioInit() bool {
 	return intToBool(initErr)
 }
 
-func ioSetBit(channel int) {
+func IoSetBit(channel int) {
 	_, err := C.io_set_bit(C.int(channel))
 
 	if err != nil {
@@ -36,7 +35,7 @@ func ioSetBit(channel int) {
 	}
 }
 
-func ioClearBit(channel int) {
+func IoClearBit(channel int) {
 	_, err := C.io_clear_bit(C.int(channel))
 
 	if err != nil {
@@ -44,15 +43,15 @@ func ioClearBit(channel int) {
 	}
 }
 
-func ioWriteAnalog(channel, val int) {
-	_, err := C.io_write_analog(C.int(channel), C.int(value))
+func IoWriteAnalog(channel, val int) {
+	_, err := C.io_write_analog(C.int(channel), C.int(val))
 
 	if err != nil {
 		log.Fatal("Unable to write analog value via C driver. Error: ", err)
 	}
 }
 
-func ioReadBit(channel int) bool {
+func IoReadBit(channel int) bool {
 	n, err := C.io_read_bit(C.int(channel))
 
 	if err != nil {
@@ -61,7 +60,7 @@ func ioReadBit(channel int) bool {
 	return intToBool(n)
 }
 
-func ioReadAnalog(channel int) int {
+func IoReadAnalog(channel int) int {
 	n, err := C.io_read_analog(C.int(channel))
 
 	if err != nil {
