@@ -60,40 +60,39 @@ func UDPTransmit(dataTxChan chan DataPackage) {
 	}
 }
 
-func TCPListen(rUnit UnitType) *net.TCPConn {
+func TCPReceive(rUnit UnitType, dataRxChan chan DataPackage) {
 	rAddr, err := net.ResolveTCPAddr("tcp", rUnit.IP+":"+rUnit.Port)
-	ln, err := net.ListenTCP("tcp", rAddr)
-	CheckError(err)
-	TCPconn, err := ln.AcceptTCP()
-	CheckError(err)
-	return TCPConn
-}
-
-func TCPConnect(rUnit UnitType, tUnit UnitType, closeChan chan bool) *net.TCPConn {
-	rAddr, err := net.ResolveTCPAddr("tcp", rUnit.IP+":"+rUnit.Port)
-	CheckError(err)
-	tAddr, err := net.ResolveTCPAddr("tcp", tUnit.IP+":"+tUnit.Port)
-	CheckError(err)
-	TCPconn, err := net.DialTCP("tcp", rAddr, tAddr)
-	CheckError(err)
-	return TCPconn
-}
-
-func TCPTransmit(TxConn *net.TCPConn, data chan []bool) {
-	_, err := TxConn.Write(data)
-	CheckError(err)
-}
-
-func TCPReceive(RxConn *net.TCPConn, dataRxChan chan DataPackage) {
 	var rPackage DataPackage
-
 	for {
-		_, err := RxConn.Read(rPackage.Data)
+		ln, err := net.ListenTCP("tcp", rAddr)
+		CheckError(err)
+		TCPconn, err := ln.Accept()
 		CheckError(err)
 
-		rPackage.IP = strings.Split(RxConn.RemoteAddr().Addr.String(), ":")[0]
-		rPackage.Port = strings.Split(RxConn.RemoteAddr().Addr.String(), ":")[1]
+		_, err = TCPconn.Read(rPackage.Data)
+		CheckError(err)
+		rPackage.IP = strings.Split(TCPconn.RemoteAddr().Addr.String(), ":")[0]
+		rPackage.Port = strings.Split(TCPconn.RemoteAddr().Addr.String().String(), ":")[1]
 
 		dataRxChan <- rPackage
+
+		TCPconn.Close()
+	}
+
+}
+
+func TCPTransmit(rUnit UnitType, dataTxChan chan DataPackage) {
+	rAddr, err := net.ResolveTCPAddr("tcp", rUnit.IP+":"+rUnit.Port)
+	var tPackage DataPackage
+	for {
+		select {
+		case tPackage = <-dataTxChan:
+			tAddr, err := net.ResolveTCPAddr("tcp", tPackage.IP+":"+tPackage.Port)
+			TCPconn, err := net.DialTCP("tcp", rAddr, tAddr)
+			TCPconn.Write(tPackage.Data)
+			TCPconn.Close()
+
+		default:
+		}
 	}
 }
