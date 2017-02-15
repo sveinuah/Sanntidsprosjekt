@@ -10,7 +10,7 @@ type StatusType struct {
 	currentFloor int
 	direction int
 	running bool
-	buttons bool [][]
+	buttons [][]bool
 	doorOpen bool
 }
 

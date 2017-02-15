@@ -59,3 +59,38 @@ func UDPTransmit(dataTxChan chan DataPackage) {
 		}
 	}
 }
+
+func TCPReceive(rUnit UnitType, dataRxChan chan DataPackage) {
+	rAddr, err := net.ResolveTCPAddr("tcp", rUnit.IP+":"+rUnit.Port)
+	var rPackage DataPackage
+	for {
+		ln, err := net.ListenTCP("tcp", rAddr)
+		CheckError(err)
+		TCPconn, err := ln.Accept()
+		CheckError(err)
+
+		_, err = TCPconn.Read(rPackage.Data)
+		CheckError(err)
+		rPackage.IP = strings.Split(TCPconn.RemoteAddr().Addr.String(), ":")[0]
+		rPackage.Port = strings.Split(TCPconn.RemoteAddr().Addr.String().String(), ":")[1]
+
+		dataRxChan <- rPackage
+
+		conn.Close()
+	}
+
+}
+
+func TCPTransmit(rUnit UnitType, dataTxChan chan DataPackage) {
+	rAddr, err := net.ResolveTCPAddr("tcp", rUnit.IP+":"+rUnit.Port)
+	var tPackage DataPackage
+	for {
+		select {
+		case tPackage = <-dataTxChan:
+			tAddr, err := net.ResolveTCPAddr("tcp", tPackage.IP+":"+tPackage.Port)
+			TCPconn, err := net.DialTCP("tcp", rAddr, tAddr)
+			conn.Write(tPackage.Data)
+		default:
+		}
+	}
+}

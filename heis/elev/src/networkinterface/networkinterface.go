@@ -1,8 +1,8 @@
 package networkinterface
 
 import (
+	"../networkmodule"
 	"../typedef"
-	"./UdpNI"
 	"fmt"
 	"strconv"
 	"time"
