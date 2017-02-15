@@ -34,22 +34,15 @@ const (
 var active bool
 var unitID int
 var unitList[] UnitType
+var elevReports map[UnitID]StatusType
 
 type Queue interface {
-	Enqueue()
+	Enqueue(OrderType)
 	Dequeue()
 }
 
 type OrderQueue struct {
 	OrderList []OrderType
-}
-
-type QueueError struct {
-	err string
-}
-
-func (err *QueueError) Error() {
-	return err.err
 }
 
 func (q *OrderQueue) Enqueue(o OrderType) OrderQueue {
@@ -59,9 +52,18 @@ func (q *OrderQueue) Enqueue(o OrderType) OrderQueue {
 func (q *OrderQueue) Dequeue() (OrderQueue, OrderType, error) {
 	l := len(q)
 	if l == 0 {
-		return q, nil, QueueError{"Queue is Empty"}
+		return q, nil, error{"Queue is empty"}
 	}
 	return q[1:], q[0], nil
+}
+
+func (q *OrderQueue) Find(o OrderType) (OrderType, error) {
+	for _, order range(q) {
+		if o.Floor == order.Floor && o.Dir == order.Dir {
+			return order, nil
+		}
+	}
+	return nil, error{"Could not find Order"}
 }
 
 func checkIfActive() {
@@ -112,12 +114,22 @@ func unitHandler(unit UnitType) {
 		}
 }
 
-func masterSyncTimer(syncTimer chan bool)
+func getElevStatus(elevStatusChan chan StatusType) {
+	emptyChan = false
+	for emptyChan != true {
+		select {
+		case report := <- elevStatusChan:
+			elevReports[report.ID] = report
+		default:
+			emptyChan = true
+		}
+	}
+}
 
 func main() {
 	orderChan := make(chan OrderPackage)
-	unitStatusChan := make(chan UnitType)
-	reportChan := make(chan elevatorReport)
+	unitChan := make(chan UnitType)
+	elevStatusChan := make(chan StatusType)
 	masterSync := make(chan Queue)
 	syncTimer := make(chan bool,1)
 
@@ -128,7 +140,7 @@ func main() {
 		}
 	}
 
-	orderQueue := new(orderQueue)
+	masterQueue := new(OrderQueue)
 
 	init()
 
@@ -136,15 +148,17 @@ func main() {
 		switch active {
 		case true:
 			select {
-			case unit := <- unitStatusChan:
+			case unit := <- unitChan:
 				unitHandler(unit)
 			case order := <- orderChan:
 				orderQueue.Enqueue(order)
 			case <- syncTimer:
 				masterSync <- orderQueue
 			default:
+				getElevStatus(elevStatusChan)
 			//reports
 			//handleorders
+				checkIfActive()
 			}
 
 		case false:
@@ -152,10 +166,9 @@ func main() {
 			case update := <- masterSync:
 				masterOrderList = update
 			default:
-				
+				checkIfActive()				
 			}
 		}
-		checkIfActive()
 		/*
 			- Hvem er på nettverket?
 			- Lag lister over heiser og mastere
