@@ -1,13 +1,13 @@
 package elevdriver
 
 import (
-	. "../elevio"
-	. "../typedef"
+	. "elevio"
+	. "typedef"
 )
 
 var lights [][]bool
 
-func buttonInterface(clearLightChan chan OrderType, buttonPressesChan chan OrderType, initChan chan int) {
+func ButtonInterface(abortChan chan bool, extLightsChan chan [][]bool, setLightsChan chan OrderType, buttonPressesChan chan OrderType, allocateOrdersChan chan OrderType, initChan chan int) {
 	numFloors = buttonInterfaceInit(initChan)
 
 	abortFlag := false
@@ -15,15 +15,15 @@ func buttonInterface(clearLightChan chan OrderType, buttonPressesChan chan Order
 		//Get new button presses and send order up/to drive
 		for floor := 0; floor < numFloors; floor++ {
 			for dir := 0; dir < 3; dir++ {
-				if elevGetButtonSignal(floor, dir) == true && lightList[floor][dir] == false { //Make variable lightList or read hardware each time?
+				if ElevGetButtonSignal(floor, dir) == true && lights[floor][dir] == false { //Make variable lightList or read hardware each time?
 					var order OrderType
 					order.Floor = floor
 					order.Dir = dir
 					order.New = true
 					buttonPressesChan <- order
 					if order.Dir == DIR_NODIR {
-						elevButtonLight(order.Floor, order.Dir, order.New)
-						allocatedOrdersChan <- order
+						ElevButtonLight(order.Floor, order.Dir, order.New)
+						allocateOrdersChan <- order
 					}
 				}
 			}
@@ -34,7 +34,7 @@ func buttonInterface(clearLightChan chan OrderType, buttonPressesChan chan Order
 			for floor := 0; floor < numFloors; floor++ {
 				for dir := 0; dir < 2; dir++ {
 					if lights[floor][dir] != extLights[floor][dir] {
-						elevButtonLight(floor, dir, extLights[floor][dir])
+						ElevButtonLight(floor, dir, extLights[floor][dir])
 						lights[floor][dir] = extLights[floor][dir]
 					}
 				}
@@ -45,14 +45,14 @@ func buttonInterface(clearLightChan chan OrderType, buttonPressesChan chan Order
 		ordersInChannel := true
 		for ordersInChannel {
 			select {
-			case order := <-clearLightChan:
-				elevButtonLight(order.Floor, order.Dir, order.New)
-				lights[Order.Floor][order.Dir] = order.New
+			case order := <-setLightsChan:
+				ElevButtonLight(order.Floor, order.Dir, order.New)
+				lights[order.Floor][order.Dir] = order.New
 			default:
 				ordersInChannel = false
 			}
 		}
-		abortFlag = checkAbortFlag(abortChan)
+		abortFlag = CheckAbortFlag(abortChan)
 	}
 }
 
@@ -61,7 +61,7 @@ func buttonInterfaceInit(initChan chan int) int {
 	//wait for drive to run elevInit, return numFloors
 	for floor := 0; floor < numFloors; floor++ {
 		for dir := 0; dir < 3; dir++ {
-			buttonList[floor][dir] = false
+			lights[floor][dir] = false
 		}
 	}
 	return numFloors

@@ -7,16 +7,16 @@ type OrderType struct {
 }
 
 type StatusType struct {
-	currentFloor int
-	direction int
-	running bool
-	buttons [][]bool
-	doorOpen bool
+	CurrentFloor int
+	Direction    int
+	Running      bool
+	Orders       [][]bool
+	DoorOpen     bool
 }
 
 type ExtReport struct {
 	internalStatus StatusType
-	newOrders [] OrderType
+	newOrders      []OrderType
 }
 
 type UnitType struct {
@@ -38,17 +38,17 @@ type DataPackage struct {
 
 type Error struct {
 	ErrCode int
-	ErrStr string
+	ErrStr  string
 }
 
 const (
-	DIR_UP    = 0
-	DIR_DOWN  = 1
-	DIR_NODIR = 2
+	DIR_UP    int = 0
+	DIR_DOWN  int = 1
+	DIR_NODIR int = 2
 )
 
-func checkAbortFlag(abortChan chan bool)
-	abortFlag := <- abortChan
+func CheckAbortFlag(abortChan chan bool) bool {
+	abortFlag := <-abortChan
 	abortChan <- abortFlag
 	return abortFlag
 }
