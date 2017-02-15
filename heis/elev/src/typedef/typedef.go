@@ -11,7 +11,7 @@ type StatusType struct {
 	CurrentFloor int
 	Direction    int
 	Running      bool
-	Orders       [][]bool
+	Orders       [4][3]bool //floor, dir
 	DoorOpen     bool
 }
 
