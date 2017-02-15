@@ -27,7 +27,7 @@ func main() {
 	//Pass all as pointers?
 	go elevdriver.Drive(abortChan, allocateOrdersChan, executedOrdersChan, elevStatusChan, setLightsChan, initChan)
 	go elevdriver.ButtonInterface(abortChan, extLightsChan, setLightsChan, buttonPressesChan, allocateOrdersChan, initChan)
-	//go Networkinterface(abortChan, allocateOrdersChan, executedOrdersChan, extLightsChan, extReportChan, elevStatusChan)
+	//go Networkinterface(abortChan, allocateOrdersChan, executedOrdersChan, extLightsChan, setLightsChan, elevStatusChan)
 
 	for abortFlag != true {
 		abortFlag = CheckAbortFlag(abortChan)
