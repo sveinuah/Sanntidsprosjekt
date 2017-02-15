@@ -7,6 +7,7 @@ type OrderType struct {
 }
 
 type StatusType struct {
+	ID           string
 	CurrentFloor int
 	Direction    int
 	Running      bool

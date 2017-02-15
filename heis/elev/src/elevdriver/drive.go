@@ -59,8 +59,12 @@ func Drive(abortChan chan bool, allocateOrdersChan chan OrderType, executedOrder
 			}
 		}
 		//Update status struct
-		<-elevStatusChan
-		elevStatusChan <- status
+		select {
+		case <-elevStatusChan:
+			fallthrough
+		default:
+			elevStatusChan <- status
+		}
 
 		abortFlag = CheckAbortFlag(abortChan)
 	}
