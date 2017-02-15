@@ -27,30 +27,39 @@ type elevatorReport struct {
 }*/
 
 const (
-	MASTER_SYNC_INTERVALL = (Time.Second * 1)
+	MASTER_SYNC_INTERVALL = (time.Second * 1)
+	INITIALIATION_WAIT_TIME = (time.Second * 3)
 )
 
 var active bool
 var unitID int
 var unitList[] UnitType
 
+type Queue interface {
+	Enqueue()
+	Dequeue()
+}
+
 type OrderQueue struct {
 	OrderList []OrderType
-	EmptyError string := "Queue is Empty"
 }
 
-func (q *OrderQueue) Error() error {
-	return q.EmptyError
+type QueueError struct {
+	err string
 }
 
-func (q *OrderQueue) Enqueue(o Order) OrderQueue {
+func (err *QueueError) Error() {
+	return err.err
+}
+
+func (q *OrderQueue) Enqueue(o OrderType) OrderQueue {
 	return append(q,o)
 }
 
 func (q *OrderQueue) Dequeue() (OrderQueue, OrderType, error) {
 	l := len(q)
 	if l == 0 {
-		return q, nil, q.Error()
+		return q, nil, QueueError{"Queue is Empty"}
 	}
 	return q[1:], q[0], nil
 }
@@ -66,13 +75,13 @@ func checkIfActive() {
 	}
 }
 
-func init(unitStatusChan chan UnitType, masterSync chan []Order) {
+func init(unitStatusChan chan UnitType, masterSync chan Queue) {
 	// broadcast "I'm here" NYI
 	//start network interface w/channels NYI
 
 	timeOut := make(chan bool, 1)
 	go func {
-		time.Sleep(time.Second * 3)
+		time.Sleep(INITIALIATION_WAIT_TIME)
 		timeOut <- true
 	}
 
@@ -109,7 +118,7 @@ func main() {
 	orderChan := make(chan OrderPackage)
 	unitStatusChan := make(chan UnitType)
 	reportChan := make(chan elevatorReport)
-	masterSync := make(chan orderQueue)
+	masterSync := make(chan Queue)
 	syncTimer := make(chan bool,1)
 
 	go func {
