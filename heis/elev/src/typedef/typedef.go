@@ -8,8 +8,10 @@ type OrderType struct {
 	New   bool
 }
 
+type unitID string
+
 type StatusType struct {
-	ID           string
+	ID           unitID
 	CurrentFloor int
 	Direction    int
 	Running      bool

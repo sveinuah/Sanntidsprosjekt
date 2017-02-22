@@ -32,24 +32,29 @@ const (
 )
 
 var active bool
-var unitID int
+var id UnitID
 var unitList[] UnitType
 var elevReports map[UnitID]StatusType
 
 type Queue interface {
-	Enqueue(OrderType)
+	Enqueue(interface{})
 	Dequeue()
 }
 
-type OrderQueue struct {
-	OrderList []OrderType
+type timedOrder struct {
+	Order OrderType
+	timeStamp time.Time
 }
 
-func (q *OrderQueue) Enqueue(o OrderType) OrderQueue {
+type OrderQueue struct {
+	OrderList []timedOrder
+}
+
+func (q *OrderQueue) Enqueue(o timedOrder) OrderQueue {
 	return append(q,o)
 }
 
-func (q *OrderQueue) Dequeue() (OrderQueue, OrderType, error) {
+func (q *OrderQueue) Dequeue() (OrderQueue, timedOrder, error) {
 	l := len(q)
 	if l == 0 {
 		return q, nil, error{"Queue is empty"}
@@ -57,7 +62,7 @@ func (q *OrderQueue) Dequeue() (OrderQueue, OrderType, error) {
 	return q[1:], q[0], nil
 }
 
-func (q *OrderQueue) Find(o OrderType) (OrderType, error) {
+func (q *OrderQueue) Find(o timedOrder) (timedOrder, error) {
 	for _, order range(q) {
 		if o.Floor == order.Floor && o.Dir == order.Dir {
 			return order, nil
@@ -97,14 +102,15 @@ func init(unitStatusChan chan UnitType, masterSync chan Queue) {
 		case done <- timeOut
 		}
 	}
-	unitID = getUnitID()  //asks network interface for an I
+	unitID = getUnitID()  //asks network interface for an ID
+
 	checkIfActive()
 }
 
 func unitHandler(unit UnitType) {
 	newUnit := true
-		for i = range(unitList){
-			if i.Port == unit.Port {
+		for _, u = range(unitList){
+			if u.Port == unit.Port {
 				newUnit = false
 				break
 			}
@@ -115,25 +121,31 @@ func unitHandler(unit UnitType) {
 }
 
 func getElevStatus(elevStatusChan chan StatusType) {
-	emptyChan = false
-	for emptyChan != true {
+	
+	for i,unit = range(unitList){
+		//getReport(unit)
+		time.Sleep(time.MilliSecond*40) 
 		select {
 		case report := <- elevStatusChan:
 			elevReports[report.ID] = report
 		default:
-			emptyChan = true
+			unitList = append(unitList[:i],unitList[i+1:]...) //deletes unit from list
 		}
 	}
+} //Usikker på denne folkens :/
+
+func handleOrders() {
+	
 }
 
 func main() {
 	orderChan := make(chan OrderPackage)
 	unitChan := make(chan UnitType)
-	elevStatusChan := make(chan StatusType)
+	elevStatusChan := make(chan StatusType, 1)
 	masterSync := make(chan Queue)
 	syncTimer := make(chan bool,1)
 
-	go func {
+	go func() {
 		for {
 			time.Sleep(MASTER_SYNC_INTERVALL)
 			syncTimer <- true
@@ -141,6 +153,8 @@ func main() {
 	}
 
 	masterQueue := new(OrderQueue)
+	activeOrders := new(OrderQueue)
+
 
 	init()
 
@@ -151,13 +165,12 @@ func main() {
 			case unit := <- unitChan:
 				unitHandler(unit)
 			case order := <- orderChan:
-				orderQueue.Enqueue(order)
+				masterQueue.Enqueue(order)
 			case <- syncTimer:
 				masterSync <- orderQueue
 			default:
 				getElevStatus(elevStatusChan)
-			//reports
-			//handleorders
+				handleOrders()
 				checkIfActive()
 			}
 
