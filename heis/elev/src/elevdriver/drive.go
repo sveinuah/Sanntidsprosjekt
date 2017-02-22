@@ -2,6 +2,7 @@ package elevdriver
 
 import (
 	. "elevio"
+	"fmt"
 	"time"
 	. "typedef"
 )
@@ -13,6 +14,7 @@ var (
 
 func Drive(abortChan chan bool, allocateOrdersChan chan OrderType, executedOrdersChan chan OrderType, elevStatusChan chan StatusType, setLightsChan chan OrderType, initChan chan int) {
 	driveInit(initChan)
+	fmt.Println("Drive initiated")
 	abortFlag := false
 	for abortFlag != true {
 		//Get all status.Orders from allocateOrdersChan and place in status.Orders
@@ -59,7 +61,10 @@ func Drive(abortChan chan bool, allocateOrdersChan chan OrderType, executedOrder
 			}
 		}
 		//Update status struct
-		<-elevStatusChan
+		select {
+		case <-elevStatusChan:
+		default:
+		}
 		elevStatusChan <- status
 
 		abortFlag = CheckAbortFlag(abortChan)
@@ -73,12 +78,7 @@ func driveInit(initChan chan int) {
 	status.CurrentFloor = ElevGetFloorSensorSignal()
 	status.Direction = DIR_NODIR
 	status.Running = false
-	for floor := 0; floor < numFloors; floor++ {
-		for dir := 0; dir < 3; dir++ {
-			status.Orders[floor][dir] = false
-		}
-
-	}
+	status.Orders = [numFloors][3]bool{{false}}
 }
 
 func stopRoutine(executedOrdersChan chan OrderType, setLightsChan chan OrderType) {
