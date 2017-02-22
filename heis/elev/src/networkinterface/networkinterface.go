@@ -9,7 +9,10 @@ import (
 
 //abortChan, allocateOrdersChan, executedOrdersChan, extLightsChan, extReportChan, elevStatusChan
 
-func ElevNetworkinterface(abortChan chan bool, allocateOrdersChan chan OrderType, executedOrdersChan chan OrderType, extLightsChan chan [][]bool, setLightsChan chan OrderType, elevStatusChan chan StatusType) {
+
+var TIMEOUT = false
+
+func ElevNetworkinterface(abortChan chan bool, allocateOrdersChan chan OrderType, executedOrdersChan chan OrderType, extLightsChan chan [][]bool, setLightsChan chan OrderType, elevStatusChan chan StatusType, quitChan chan bool) {
 	/*
 		- absorb Status messages
 		- pick up executed orders, if timeout, bounce back to BI
@@ -18,24 +21,85 @@ func ElevNetworkinterface(abortChan chan bool, allocateOrdersChan chan OrderType
 	*/
 
 	ID := "Jarvis"
-	TxPort := 20014
+	TxPort := 30014
 	RxPort := 30014
 
 	statusTxChan := make(chan StatusType)
 	statusReqRxChan := make(chan bool)
+	statusAckRxChan := make(chan bool)
 
 	buttonPressTxChan := make(chan OrderType)
-	extLightsTxChan := make(chan [][]bool)
+	buttonAckRxChan := make(chan bool)
+
+	extLightsRxChan := make(chan [][]bool)
 
 	executedOrdersTxChan := make(chan OrderType)
-	newOrdersRxChan := make(chan OrderType)
+	executedOrdersAckRxChan := make(chan bool)
 
-	ackTxChan := make(chan bool)
-	ackRxChan := make(chan bool)
+	newOrdersRxChan := make(chan OrderType)
+	newOrderAckChan := make(chan bool)
 
 	go bcast.Transmitter(TxPort, statusTxChan, buttonPressTxChan, executedOrdersTxChan, ackTxChan)
-	go bcast.Receiver(RxPort, statusReqRxChan, extLightsTxChan, newOrdersRxChan, ackRxChan)
+	go bcast.Receiver(RxPort, statusReqRxChan, extLightsRxChan, newOrdersRxChan, ackRxChan)
 
+	go sendStatus(statusTxChan, statusReqRxChan, elevStatusChan, statusAckRxChan, quitChan)
+
+}
+
+func sendStatus(statusTxChan chan StatusType, statusReqRxChan chan bool, elevStatusChan chan StatusType, statusAckRxChan chan bool, quitChan chan bool){
+	
+	var status StatusType
+	var success bool
+	var quit bool
+	timeout := 0
+	
+	for !quit {
+
+		select{
+		
+		case quit = <- quitChan:
+		
+		default:
+
+			success = false
+			// Wait for status request
+			statusReq := <- statusReqRxChan
+			// Get current status
+			status = <- elevStatusChan
+			// Move current status into transmit channel
+			statusTxChan <- status 
+
+			// While we wait for acknowledge from Master:
+			for !success && !quit {
+		
+				select{
+		
+				case success = <- statusAckRxChan:
+					timeout = 0
+					break
+
+				case timeout == 10:
+					TIMEOUT = true
+					break
+
+				default:
+					if timeout >= 1 {
+						statusTxChan <- status	
+					}
+					
+					go func(){
+						for !success {
+							time.Sleep(10*time.Millisecond)
+							timeout++
+						}
+					}()	
+				}
+			}
+		}
+	}
+}
+
+/*
 	timeOutIter := 0
 	timeOut := false
 
