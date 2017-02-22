@@ -1,6 +1,8 @@
 package typedef
 
 type OrderType struct {
+	To    string
+	From  string
 	Floor int
 	Dir   int
 	New   bool
@@ -29,12 +31,6 @@ type UnitType struct {
 type OrderPackage struct {
 	Order OrderType
 	Unit  UnitType
-}
-
-type DataPackage struct {
-	IP   string
-	Port string
-	Data []byte
 }
 
 type Error struct {

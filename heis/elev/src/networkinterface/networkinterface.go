@@ -1,10 +1,9 @@
 package networkinterface
 
 import (
-	"../networkmodule/bcast/"
-	"../typedef"
+	"../networkmodule/bcast"
+	. "../typedef"
 	"fmt"
-	"strconv"
 	"time"
 )
 
@@ -17,16 +16,62 @@ func ElevNetworkinterface(abortChan chan bool, allocateOrdersChan chan OrderType
 		- pick up button presses, if timeout, bounce back to setLights and allocateOrders
 		- make extLights matrix and pass along
 	*/
-	//Init
 
-	statusTxChan := make(chan StatusType,1)
-	buttonTxChan := make(chan )
+	ID := "Jarvis"
+	TxPort := 20014
+	RxPort := 30014
 
-	go bcast.Transmitter()
+	statusTxChan := make(chan StatusType)
+	statusReqRxChan := make(chan bool)
+
+	buttonPressTxChan := make(chan OrderType)
+	extLightsTxChan := make(chan [][]bool)
+
+	executedOrdersTxChan := make(chan OrderType)
+	newOrdersRxChan := make(chan OrderType)
+
+	ackTxChan := make(chan bool)
+	ackRxChan := make(chan bool)
+
+	go bcast.Transmitter(TxPort, statusTxChan, buttonPressTxChan, executedOrdersTxChan, ackTxChan)
+	go bcast.Receiver(RxPort, statusReqRxChan, extLightsTxChan, newOrdersRxChan, ackRxChan)
+
+	timeOutIter := 0
+	timeOut := false
 
 	abortFlag := false
 	for abortFlag != true {
 		select {
+		case <-statusReqRxChan:
+
+			status := <-elevStatusChan
+			//Setting the ID before sending, may put this somewhere else
+			status.ID = ID
+
+			//Sendng the status
+			statusTxChan <- status
+			acked := false
+
+			//Waiting for acknowledgement from master
+			for acked == false && timeOut != true {
+				select {
+				//If we receive acknowledgement, set acked = true and return ack.
+				case acked = <-ackRxChan:
+					ackTxChan <- true
+
+				// If we have tried ten times and not gotten an ack, set timeout and quit.
+				default:
+					if timeOutIter > 10 {
+						timeOut = true
+					}
+
+					// Iterate and try to send the information 10 times.
+					timeOutIter++
+					time.Sleep(10 * time.Millisecond)
+					statusTxChan <- status
+				}
+			}
+
 		case status := <-elevStatusChan:
 
 			statusTxChan <- status
@@ -35,12 +80,20 @@ func ElevNetworkinterface(abortChan chan bool, allocateOrdersChan chan OrderType
 			//Normally send to master.
 
 			//If timeout: bounce back to elevator
+			/*
+				allocateOrdersChan <- buttonPress
+				setLightsChan <- buttonPress
+			*/
+		case executedOrder <- executedOrdersChan:
+			//Normally pass to master.
+			//If timeout:
+
 			allocateOrdersChan <- buttonPress
 			setLightsChan <- buttonPress
 
 		case executedOrder <- executedOrdersChan:
 			//Normally send to master.
-			//If timeout: 
+			//If timeout:
 
 		default:
 		}
