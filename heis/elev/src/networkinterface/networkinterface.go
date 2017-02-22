@@ -9,10 +9,11 @@ import (
 
 //abortChan, allocateOrdersChan, executedOrdersChan, extLightsChan, extReportChan, elevStatusChan
 
-
 var TIMEOUT = false
+var RESEND_TIME = 10 * time.Millisecond
+var TIMOUT_TIME = 100 * time.Millisecond
 
-func ElevNetworkinterface(abortChan chan bool, allocateOrdersChan chan OrderType, executedOrdersChan chan OrderType, extLightsChan chan [][]bool, setLightsChan chan OrderType, elevStatusChan chan StatusType, quitChan chan bool) {
+func ElevNetworkinterface(quitChan chan bool, allocateOrdersChan chan OrderType, executedOrdersChan chan OrderType, extLightsChan chan [][]bool, setLightsChan chan OrderType, buttonPressesChan chan OrderType, elevStatusChan chan StatusType) {
 	/*
 		- absorb Status messages
 		- pick up executed orders, if timeout, bounce back to BI
@@ -42,130 +43,169 @@ func ElevNetworkinterface(abortChan chan bool, allocateOrdersChan chan OrderType
 	go bcast.Transmitter(TxPort, statusTxChan, buttonPressTxChan, executedOrdersTxChan, ackTxChan)
 	go bcast.Receiver(RxPort, statusReqRxChan, extLightsRxChan, newOrdersRxChan, ackRxChan)
 
-	go sendStatus(statusTxChan, statusReqRxChan, elevStatusChan, statusAckRxChan, quitChan)
-
+	go transmitStatus(statusTxChan, statusReqRxChan, elevStatusChan, statusAckRxChan, quitChan)
+	go transmitButtonPress(buttonPressesChan, buttonPressTxChan, buttonAckRxChan, allocateOrders, setLightsChan, quitChan)
+	go transmitExecOrders(executedOrdersChan, executedOrdersTxChan, executedOrdersAckRxChan, quitChan)
 }
 
-func sendStatus(statusTxChan chan StatusType, statusReqRxChan chan bool, elevStatusChan chan StatusType, statusAckRxChan chan bool, quitChan chan bool){
-	
+func transmitStatus(statusTxChan chan StatusType, statusReqRxChan chan bool, elevStatusChan chan StatusType, statusAckRxChan chan bool, quitChan chan bool) {
+
 	var status StatusType
+	var statusReq bool
 	var success bool
 	var quit bool
-	timeout := 0
-	
+
 	for !quit {
 
-		select{
-		
-		case quit = <- quitChan:
-		
+		select {
+
+		case quit = <-quitChan:
+
 		default:
 
 			success = false
 
 			// Wait for status request
-			statusReq := <- statusReqRxChan
+			statusReq = <-statusReqRxChan
 
 			// Get current status
-			status = <- elevStatusChan
+			status = <-elevStatusChan
 
 			// Move current status into transmit channel
-			statusTxChan <- status 
+			statusTxChan <- status
 
 			// While we wait for acknowledge from Master:
+
+			timeoutTimer := time.NewTimer(TIMOUT_TIME)
+			resendTimer := time.NewTimer(RESEND_TIME)
+
 			for !success {
-		
-				select{
-		
-				case success = <- statusAckRxChan:
-					timeout = 0
+
+				select {
+
+				case success = <-statusAckRxChan:
+					timeoutTimer.Stop()
+					resendTimer.Stop()
 					break
 
-				case timeout == 10:
+				case <-timeoutTimer.C:
+					success = true
 					TIMEOUT = true
 					break
 
+				case <-resendTimer.C:
+					statusTxChan <- status
+					resendTimer.Reset(RESEND_TIME)
+
 				default:
-					if timeout >= 1 {
-						statusTxChan <- status	
-					}
-					
-					go func(){
-						for !success {
-							time.Sleep(10*time.Millisecond)
-							timeout++
-						}
-					}()	
 				}
 			}
 		}
 	}
 }
 
-/*
-	timeOutIter := 0
-	timeOut := false
+func transmitButtonPress(buttonPressChan chan OrderType, buttonPressTxChan chan OrderType, buttonAckRxChan chan bool, allocateOrdersChan chan OrderType, setLightsChan chan OrderType, quitChan chan bool) {
 
-	abortFlag := false
-	for abortFlag != true {
+	var buttonPress OrderType
+	var success bool
+	var quit bool
+
+	for !quit {
+
 		select {
-		case <-statusReqRxChan:
 
-			status := <-elevStatusChan
-			//Setting the ID before sending, may put this somewhere else
-			status.ID = ID
-
-			//Sendng the status
-			statusTxChan <- status
-			acked := false
-
-			//Waiting for acknowledgement from master
-			for acked == false && timeOut != true {
-				select {
-				//If we receive acknowledgement, set acked = true and return ack.
-				case acked = <-ackRxChan:
-					ackTxChan <- true
-
-				// If we have tried ten times and not gotten an ack, set timeout and quit.
-				default:
-					if timeOutIter > 10 {
-						timeOut = true
-					}
-
-					// Iterate and try to send the information 10 times.
-					timeOutIter++
-					time.Sleep(10 * time.Millisecond)
-					statusTxChan <- status
-				}
-			}
-
-		case status := <-elevStatusChan:
-
-			statusTxChan <- status
-
-		case buttonPress := <-buttonPressesChan:
-			//Normally send to master.
-
-			//If timeout: bounce back to elevator
-			/*
-				allocateOrdersChan <- buttonPress
-				setLightsChan <- buttonPress
-			*/
-		case executedOrder <- executedOrdersChan:
-			//Normally pass to master.
-			//If timeout:
-
-			allocateOrdersChan <- buttonPress
-			setLightsChan <- buttonPress
-
-		case executedOrder <- executedOrdersChan:
-			//Normally send to master.
-			//If timeout:
+		case quit = <-quitChan:
 
 		default:
-		}
-		//Do stuff
 
-		abortFlag = CheckAbortFlag()
+			success = false
+
+			// Wait for button press
+			buttonPress = <-buttonPressChan
+
+			// Move current button press into transmit channe
+			buttonPressTxChan <- buttonPress
+
+			// While we wait for acknowledge from Master:
+			timeoutTimer := time.NewTimer(TIMOUT_TIME)
+			resendTimer := time.NewTimer(RESEND_TIME)
+
+			for !success {
+
+				select {
+
+				case success = <-buttonAckRxChan:
+					timeoutTimer.Stop()
+					resendTimer.Stop()
+					break
+
+				case <-timeoutTimer.C:
+					success = true
+					TIMEOUT = true
+
+					allocateOrdersChan <- buttonPress
+					setLightsChan <- buttonPress
+
+					break
+
+				case <-resendTimer.C:
+					buttonPressTxChan <- buttonPress
+					resendTimer.Reset(RESEND_TIME)
+
+				default:
+				}
+			}
+		}
+	}
+}
+
+func transmitExecOrders(executedOrdersChan chan OrderType, executedOrdersTxChan chan OrderType, executedOrdersAckRxChan chan bool, quitChan chan bool) {
+
+	var executedOrder OrderType
+	var success bool
+	var quit bool
+
+	for !quit {
+
+		select {
+
+		case quit = <-quitChan:
+
+		default:
+
+			success = false
+
+			// Wait for button press
+			executedOrder = <-executedOrdersChan
+
+			// Move current button press into transmit channe
+			executedOrdersTxChan <- executedOrder
+
+			// While we wait for acknowledge from Master:
+			timeoutTimer := time.NewTimer(TIMOUT_TIME)
+			resendTimer := time.NewTimer(RESEND_TIME)
+
+			for !success {
+
+				select {
+
+				case success = <-executedOrdersAckRxChan:
+					timeoutTimer.Stop()
+					resendTimer.Stop()
+					break
+
+				case <-timeoutTimer.C:
+					success = true
+					TIMEOUT = true
+					break
+
+				case <-resendTimer.C:
+					executedOrdersTxChan <- executedOrder
+					resendTimer.Reset(RESEND_TIME)
+
+				default:
+				}
+			}
+		}
 	}
 }
