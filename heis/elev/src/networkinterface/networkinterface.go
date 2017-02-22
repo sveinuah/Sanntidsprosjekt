@@ -62,15 +62,18 @@ func sendStatus(statusTxChan chan StatusType, statusReqRxChan chan bool, elevSta
 		default:
 
 			success = false
+
 			// Wait for status request
 			statusReq := <- statusReqRxChan
+
 			// Get current status
 			status = <- elevStatusChan
+
 			// Move current status into transmit channel
 			statusTxChan <- status 
 
 			// While we wait for acknowledge from Master:
-			for !success && !quit {
+			for !success {
 		
 				select{
 		
