@@ -47,7 +47,7 @@ const (
 	DIR_NODIR int = 2
 )
 
-func CheckAbortFlag(abortChan chan bool) bool {
+func CheckAbortFlag(abortChan chan bool) bool { //Hva hvis flagget blir borte??
 	abortFlag := <-abortChan
 	abortChan <- abortFlag
 	return abortFlag

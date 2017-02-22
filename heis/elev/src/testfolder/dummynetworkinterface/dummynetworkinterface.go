@@ -8,7 +8,7 @@ import (
 func ElevNetworkinterface(abortChan chan bool, allocateOrdersChan chan OrderType, executedOrdersChan chan OrderType, extLightsChan chan [][]bool, setLightsChan chan OrderType, elevStatusChan chan StatusType) {
 	/*
 		- absorb Status messages
-		- pick up executed orders, if timeout, bounce back to BI
+		- pick up executed orders, if timeout, do nothing
 		- pick up button presses, if timeout, bounce back to setLights and allocateOrders
 		- make extLights matrix and pass along
 	*/
@@ -25,8 +25,7 @@ func ElevNetworkinterface(abortChan chan bool, allocateOrdersChan chan OrderType
 			setLightsChan <- buttonPress
 		case executedOrder <- executedOrdersChan:
 			//Normally pass to master.
-			//If timeout:
-
+			//If timeout: Do nothing
 		default:
 		}
 		//Do stuff
