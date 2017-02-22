@@ -2,7 +2,7 @@ package elevdriver
 
 import (
 	. "elevio"
-	"fmt"
+	//"fmt"
 	"time"
 	. "typedef"
 )
@@ -14,7 +14,6 @@ var (
 
 func Drive(abortChan chan bool, allocateOrdersChan chan OrderType, executedOrdersChan chan OrderType, elevStatusChan chan StatusType, setLightsChan chan OrderType, initChan chan int) {
 	driveInit(initChan)
-	fmt.Println("Drive initiated")
 	abortFlag := false
 	for abortFlag != true {
 		//Get all status.Orders from allocateOrdersChan and place in status.Orders
@@ -44,14 +43,20 @@ func Drive(abortChan chan bool, allocateOrdersChan chan OrderType, executedOrder
 				if status.Direction == DIR_DOWN {
 					if checkOrdersBelow(status.CurrentFloor) == true {
 						run(DIR_DOWN)
+					} else if status.Orders[status.CurrentFloor][DIR_UP] == true {
+						status.Direction = DIR_UP
+						stopRoutine(executedOrdersChan, setLightsChan)
 					} else if checkOrdersAbove(status.CurrentFloor) == true {
 						run(DIR_UP)
 					} else {
 						run(DIR_NODIR)
 					}
-				} else {
+				} else { //Legg inn støtte her for å håndtere opp i idle
 					if checkOrdersAbove(status.CurrentFloor) == true {
 						run(DIR_UP)
+					} else if status.Orders[status.CurrentFloor][DIR_DOWN] == true {
+						status.Direction = DIR_DOWN
+						stopRoutine(executedOrdersChan, setLightsChan)
 					} else if checkOrdersBelow(status.CurrentFloor) == true {
 						run(DIR_DOWN)
 					} else {
@@ -66,19 +71,23 @@ func Drive(abortChan chan bool, allocateOrdersChan chan OrderType, executedOrder
 		default:
 		}
 		elevStatusChan <- status
-
 		abortFlag = CheckAbortFlag(abortChan)
+
 	}
 }
 
 func driveInit(initChan chan int) {
 	numFloors = ElevInit() //should be called from Comm. Handler?
 	initChan <- numFloors
-	ElevMotorDirection(0)
+	ElevMotorDirection(DIR_UP)
+	for ElevGetFloorSensorSignal() == -1 {
+
+	}
 	status.CurrentFloor = ElevGetFloorSensorSignal()
+	ElevMotorDirection(DIR_NODIR)
 	status.Direction = DIR_NODIR
 	status.Running = false
-	status.Orders = [numFloors][3]bool{{false}}
+	status.Orders = [4][3]bool{{false}}
 }
 
 func stopRoutine(executedOrdersChan chan OrderType, setLightsChan chan OrderType) {
@@ -118,7 +127,7 @@ func stopRoutine(executedOrdersChan chan OrderType, setLightsChan chan OrderType
 	status.DoorOpen = false
 }
 
-func run(dir int) { //Feil så lenge elevMotorDirection bruker -1, 0 og 1
+func run(dir int) {
 	switch dir {
 	case DIR_NODIR:
 		if status.Running == true {
@@ -135,7 +144,7 @@ func run(dir int) { //Feil så lenge elevMotorDirection bruker -1, 0 og 1
 }
 
 func checkOrdersAbove(currentFloor int) bool {
-	for floor := currentFloor; floor < numFloors; floor++ {
+	for floor := currentFloor + 1; floor < numFloors; floor++ {
 		for dir := 0; dir < 3; dir++ {
 			if status.Orders[floor][dir] == true {
 				return true

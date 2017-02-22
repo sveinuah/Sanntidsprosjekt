@@ -5,7 +5,7 @@ import (
 	. "typedef"
 )
 
-var lights [][]bool
+var lights [4][3]bool
 
 func ButtonInterface(abortChan chan bool, extLightsChan chan [][]bool, setLightsChan chan OrderType, buttonPressesChan chan OrderType, allocateOrdersChan chan OrderType, initChan chan int) {
 	numFloors := buttonInterfaceInit(initChan)
@@ -56,7 +56,7 @@ func ButtonInterface(abortChan chan bool, extLightsChan chan [][]bool, setLights
 	}
 }
 
-func buttonInterfaceInit(initChan chan int) {
+func buttonInterfaceInit(initChan chan int) int {
 	numFloors := <-initChan
 	//wait for drive to run elevInit, return numFloors
 	lights = [N_FLOORS][3]bool{{false}}

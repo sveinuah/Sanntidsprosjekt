@@ -10,10 +10,10 @@ import (
 
 func main() {
 	ElevInit()
-	testvar := -1
+	testvar := 2
 	for {
-		time.Sleep(time.Millisecond * 5)
-		testvar = ElevGetFloorSensorSignal()
+		ElevMotorDirection(testvar)
+		time.Sleep(2 * time.Second)
 		fmt.Println(testvar)
 	}
 }

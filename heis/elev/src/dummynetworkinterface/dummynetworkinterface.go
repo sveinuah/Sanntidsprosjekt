@@ -3,7 +3,7 @@ package dummynetworkinterface
 
 import (
 	//"../../networkmodule/bcast"
-	"fmt"
+	//"fmt"
 	. "typedef"
 )
 
@@ -24,9 +24,9 @@ func DummyNetworkinterface(abortChan chan bool, allocateOrdersChan chan OrderTyp
 	abortFlag := false
 	for abortFlag != true {
 		select {
-		case status := <-elevStatusChan:
+		case <-elevStatusChan: //status := <-elevStatusChan:
 			//statusTxChan <- status
-			fmt.Println(status)
+			//fmt.Println(status)
 		case buttonPress := <-buttonPressesChan:
 			//Normally send to master.
 
@@ -34,9 +34,9 @@ func DummyNetworkinterface(abortChan chan bool, allocateOrdersChan chan OrderTyp
 			allocateOrdersChan <- buttonPress
 			setLightsChan <- buttonPress
 
-		case executedOrder := <-executedOrdersChan:
+		case <-executedOrdersChan: //executedOrder := <-executedOrdersChan:
 			//Normally send to master.
-			fmt.Println(executedOrder)
+			//fmt.Println(executedOrder)
 			//If timeout:
 
 		default:
