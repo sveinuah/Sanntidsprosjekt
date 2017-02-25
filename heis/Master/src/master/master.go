@@ -4,18 +4,10 @@ import (
 	"../typedef"
 	"log"
 	"time"
+	"../orderqueue"
 )
 
 /* Har vi lyst til å definere dette i networkInterface?
-
-const (
-	MIN_MASTER_PORT = 20000
-	MAX_MASTER_PORT = 30000
-
-	MASTER_LISTEN_PORT = 40100
-	ORDER_COMPLETE_PORT = 40200
-	MASTER_SYNC_PORT = 40300
-)
 
 type elevatorReport struct {
 	error int 
@@ -27,84 +19,153 @@ type elevatorReport struct {
 }*/
 
 const (
-	MASTER_SYNC_INTERVALL = (time.Second * 1)
-	INITIALIATION_WAIT_TIME = (time.Second * 3)
+	MASTER_SYNC_INTERVALL int = 1000 // in milliseconds
+	INITIALIATION_WAIT_TIME int = 3 // in seconds
+	REPORT_INTERVALL int = 2 //in seconds
+
+	STATE_GO_ACTIVE int = 0
+	STATE_ACTIVE int = 1
+	STATE_GO_PASSIVE int = 2
+	STATE_PASSIVE int = 3
+	STATE_QUIT int = 4
 )
 
-var active bool
 var id UnitID
 var unitList[] UnitType
-var elevReports map[UnitID]StatusType
 
-type Queue interface {
-	Enqueue(interface{})
-	Dequeue()
-}
+func main() {
+	var orderBackup map[UnitID]TimedOrder
+	var elevReports map[UnitID]StatusType
 
-type timedOrder struct {
-	Order OrderType
-	timeStamp time.Time
-}
+	orderChan := make(chan OrderPackage)
+	unitChan := make(chan UnitType)
+	sync := make(chan []TimedOrder)
+	interCom := make(chan []TimedOrder)
+	quit := make(chan bool)
+	
+	syncTimer := time.Tick(MASTER_SYNC_INTERVALL * time.Millisecond)
 
-type OrderQueue struct {
-	OrderList []timedOrder
-}
+	lastState := init()
+	state := lastState
 
-func (q *OrderQueue) Enqueue(o timedOrder) OrderQueue {
-	return append(q,o)
-}
-
-func (q *OrderQueue) Dequeue() (OrderQueue, timedOrder, error) {
-	l := len(q)
-	if l == 0 {
-		return q, nil, error{"Queue is empty"}
-	}
-	return q[1:], q[0], nil
-}
-
-func (q *OrderQueue) Find(o timedOrder) (timedOrder, error) {
-	for _, order range(q) {
-		if o.Floor == order.Floor && o.Dir == order.Dir {
-			return order, nil
-		}
-	}
-	return nil, error{"Could not find Order"}
-}
-
-func checkIfActive() {
-	active = true
-	for _, unit := range(unitList) {
-		if unit.Type == TYPE_MASTER {
-			if unitID > unit.Port {
-				active = false
+	for {
+		state = getState(lastState)
+		switch state {
+		case STATE_GO_PASSIVE:
+			//transition from active to passive
+			fallthrough
+		case STATE_PASSIVE:
+			select {
+			case orderBackup = <- masterSync:
+			default:			
 			}
+		case STATE_GO_ACTIVE:
+			//transition from passive to active
+			go active(orderChan, unitChan, sync, interCom, quit)
+			fallthrough
+		case STATE_ACTIVE:
+			//handle sync
+			masterSync <- orderBackup
+		case STATE_QUIT:
+			//do quit stuff
+		default:
+		}
+	}
+
+		/*
+			- Hvem er på nettverket?
+			- Lag lister over heiser og mastere
+			- Sjekk om jeg er sjef? Hvis ikke, hopp fram til **
+			- Be om status fra alle heiser
+			**
+			
+
+
+		*/
+
+}
+
+func active(orders chan OrderType, units chan UnitType, interCom chan map[UnitID]TimedOrder, quit chan bool) { // not finished
+	elevReports := make(map[UnitID]StatusType)
+	orderList := <- interCom // provided from backup
+
+	reportTime := time.Tick(REPORT_INTERVALL * time.Second)
+
+	for {
+		select {
+		case unit := <- unitChan:
+			unitHandler(unit)
+		case order := <- orderChan:
+			timedOrder := TimedOrder{order}
+			if order.New {
+				orderList[timedOrder.ID] = timedOrder
+			} else {
+				delete(orderList,timedOrder.ID)
+			}
+			interCom <- orderList
+		case <- reportTime:
+			elevReports = getElevStatus()
+		case <- quit:
+			//do quit stuff
+		default:
+			for key, order := range(orderList) {
+				// BLI ENIGE OM MASTER SKAL HOLDE TID. TRUR EGENTLIG DET ER NETWORK INTERFACE MAT.
 		}
 	}
 }
 
-func init(unitStatusChan chan UnitType, masterSync chan Queue) {
+
+func init(unitStatusChan chan UnitType, sync chan Queue) {
 	// broadcast "I'm here" NYI
 	//start network interface w/channels NYI
 
-	timeOut := make(chan bool, 1)
-	go func {
-		time.Sleep(INITIALIATION_WAIT_TIME)
-		timeOut <- true
-	}
+	timeOut := time.After(INITIALIATION_WAIT_TIME * time.Second)
 
 	done := false
 	for done != true {
 		select {
 		case unit := <- unitStatusChan:
 			unitHandler(unit)
-		case orderList := <- masterSync:
+		case orderList := <- sync:
 			copy(masterOrderList, orderList)
-		case done <- timeOut
+		case <- timeOut:
+			done = true
 		}
 	}
-	unitID = getUnitID()  //asks network interface for an ID
+	unitID = getUnitID()  //asks network interface for an ID 
+	
+	if ckeckIfActive() {
+		go active(orderChan, unitChan, elevStatusChan, masterSync, quit)
+		return STATE_ACTIVE
+	} else {
+		go passive(masterSync, quit)
+		return STATE_PASSIVE
+	}
+}
+func getState(lastState int) {
+	// get and return STATE_QUIT when quit flag is raised NYI
+	if checkIfActive() {
+		if lastState == STATE_ACTIVE {
+			return STATE_ACTIVE
+		}
+		return STATE_GO_ACTIVE
+	} else {
+		if lastState == STATE_PASSIVE {
+			return STATE_PASSIVE
+		}
+		return STATE_GO_PASSIVE
+	}
+}
 
-	checkIfActive()
+func checkIfActive() bool {
+	for _, unit := range(unitList) {
+		if unit.Type == TYPE_MASTER {
+			if unitID > unit.Port {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func unitHandler(unit UnitType) {
@@ -116,82 +177,26 @@ func unitHandler(unit UnitType) {
 			}
 		}
 		if(newUnit) {
-			unitList.append(unit)
+			unitList = append(unitlsit, unit)
 		}
 }
 
-func getElevStatus(elevStatusChan chan StatusType) {
-	
-	for i,unit = range(unitList){
-		//getReport(unit)
-		time.Sleep(time.MilliSecond*40) 
-		select {
-		case report := <- elevStatusChan:
-			elevReports[report.ID] = report
-		default:
+func getElevStatus() map[UnitID]StatusType {
+	elevReports := map[UnitID]StatusType{}
+	statusChan := make(chan StatusType)
+	i := 0
+	length := len(unitList)
+
+	for i < length{
+		//getReport(unit, statusChan) // Should send empty report if timeout
+		report := <- statusChan
+		if report.ID == "" {
 			unitList = append(unitList[:i],unitList[i+1:]...) //deletes unit from list
+			length--
+		} else {
+			elevReports[report.ID] = report
+			i++
 		}
 	}
-} //Usikker på denne folkens :/
-
-func handleOrders() {
-	
-}
-
-func main() {
-	orderChan := make(chan OrderPackage)
-	unitChan := make(chan UnitType)
-	elevStatusChan := make(chan StatusType, 1)
-	masterSync := make(chan Queue)
-	syncTimer := make(chan bool,1)
-
-	go func() {
-		for {
-			time.Sleep(MASTER_SYNC_INTERVALL)
-			syncTimer <- true
-		}
-	}
-
-	masterQueue := new(OrderQueue)
-	activeOrders := new(OrderQueue)
-
-
-	init()
-
-	for {
-		switch active {
-		case true:
-			select {
-			case unit := <- unitChan:
-				unitHandler(unit)
-			case order := <- orderChan:
-				masterQueue.Enqueue(order)
-			case <- syncTimer:
-				masterSync <- orderQueue
-			default:
-				getElevStatus(elevStatusChan)
-				handleOrders()
-				checkIfActive()
-			}
-
-		case false:
-			select {
-			case update := <- masterSync:
-				masterOrderList = update
-			default:
-				checkIfActive()				
-			}
-		}
-		/*
-			- Hvem er på nettverket?
-			- Lag lister over heiser og mastere
-			- Sjekk om jeg er sjef? Hvis ikke, hopp fram til **
-			- Be om status fra alle heiser
-			**
-			
-
-
-		*/
-	}
-
+	return elevReports
 }

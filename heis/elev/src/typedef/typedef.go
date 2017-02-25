@@ -35,9 +35,17 @@ type OrderPackage struct {
 	Unit  UnitType
 }
 
-type Error struct {
-	ErrCode int
-	ErrStr  string
+type ElevError struct {
+	errCode int
+	errStr  string
+}
+
+func (e *ElevError) Error() string {
+	return e.errStr
+}
+
+func (e *ElevError) ErrorCode() int {
+	return e.errCode
 }
 
 const (
