@@ -10,7 +10,7 @@ import (
 
 func main() {
 	ElevInit()
-	testvar := 2
+	testvar := 1
 	for {
 		ElevMotorDirection(testvar)
 		time.Sleep(2 * time.Second)

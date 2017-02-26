@@ -7,7 +7,7 @@ import (
 	. "typedef"
 )
 
-func DummyNetworkinterface(abortChan chan bool, allocateOrdersChan chan OrderType, executedOrdersChan chan OrderType, extLightsChan chan [][]bool, setLightsChan chan OrderType, buttonPressesChan chan OrderType, elevStatusChan chan StatusType) {
+func DummyNetworkinterface(quitChan chan bool, allocateOrdersChan chan OrderType, executedOrdersChan chan OrderType, extLightsChan chan [][]bool, setLightsChan chan OrderType, buttonPressesChan chan OrderType, elevStatusChan chan StatusType) {
 	/*
 		- absorb Status messages
 		- pick up executed orders, if timeout, bounce back to BI
@@ -21,8 +21,7 @@ func DummyNetworkinterface(abortChan chan bool, allocateOrdersChan chan OrderTyp
 
 	//go bcast.Transmitter()
 
-	abortFlag := false
-	for abortFlag != true {
+	for {
 		select {
 		case <-elevStatusChan: //status := <-elevStatusChan:
 			//statusTxChan <- status
@@ -38,11 +37,10 @@ func DummyNetworkinterface(abortChan chan bool, allocateOrdersChan chan OrderTyp
 			//Normally send to master.
 			//fmt.Println(executedOrder)
 			//If timeout:
+		case <-quitChan:
+			return
 
 		default:
 		}
-		//Do stuff
-
-		abortFlag = CheckAbortFlag(abortChan)
 	}
 }
