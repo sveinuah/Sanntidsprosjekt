@@ -1,38 +1,28 @@
 package typedef
 
 type OrderType struct {
-	To    string
-	From  string
+	To    unitType
+	From  unitType
 	Floor int
 	Dir   int
 	New   bool
 }
 
-type unitID string
+type UnitID string
 
 type StatusType struct {
-	ID           unitID
+	From         UnitID
+	ID           int
 	CurrentFloor int
 	Direction    int
 	Running      bool
-	Orders       [4][3]bool //floor, dir
+	MyOrders     [4][3]bool //floor, dir
 	DoorOpen     bool
-}
-
-type ExtReport struct {
-	internalStatus StatusType
-	newOrders      []OrderType
 }
 
 type UnitType struct {
 	Type int
-	IP   string
-	Port string
-}
-
-type OrderPackage struct {
-	Order OrderType
-	Unit  UnitType
+	ID   UnitID
 }
 
 type ElevError struct {

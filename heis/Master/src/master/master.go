@@ -1,17 +1,17 @@
 package main
 
 import (
+	"../orderqueue"
 	"../typedef"
 	"log"
 	"time"
-	"../orderqueue"
 )
 
 /* Har vi lyst til å definere dette i networkInterface?
 
 type elevatorReport struct {
-	error int 
-	currentFloor int 
+	error int
+	currentFloor int
 	direction int
 	running bool
 	intOrderList [] Order
@@ -19,33 +19,37 @@ type elevatorReport struct {
 }*/
 
 const (
-	MASTER_SYNC_INTERVALL int = 1000 // in milliseconds
-	INITIALIATION_WAIT_TIME int = 3 // in seconds
-	REPORT_INTERVALL int = 2 //in seconds
+	MASTER_SYNC_INTERVALL   int = 100 // in milliseconds
+	INITIALIATION_WAIT_TIME int = 3   // in seconds
+	REPORT_INTERVALL        int = 2   //in seconds
 
-	STATE_GO_ACTIVE int = 0
-	STATE_ACTIVE int = 1
+	STATE_GO_ACTIVE  int = 0
+	STATE_ACTIVE     int = 1
 	STATE_GO_PASSIVE int = 2
-	STATE_PASSIVE int = 3
-	STATE_QUIT int = 4
+	STATE_PASSIVE    int = 3
+	STATE_QUIT       int = 4
 )
 
 var id UnitID
-var unitList[] UnitType
+var numFloors int
+var unitList []UnitType
+var orderList [][]masterOrder //numFloors+2directions
+
+type masterOrder struct {
+	OrderType
+	timeStamp   time.Time
+	arrivalTime time.Time
+}
 
 func main() {
-	var orderBackup map[UnitID]TimedOrder
-	var elevReports map[UnitID]StatusType
 
-	orderChan := make(chan OrderPackage)
-	unitChan := make(chan UnitType)
-	sync := make(chan []TimedOrder)
+	syncChan := make(chan []TimedOrder)
 	interCom := make(chan []TimedOrder)
 	quit := make(chan bool)
-	
+
 	syncTimer := time.Tick(MASTER_SYNC_INTERVALL * time.Millisecond)
 
-	lastState := init()
+	lastState := init(syncChan)
 	state := lastState
 
 	for {
@@ -56,93 +60,98 @@ func main() {
 			fallthrough
 		case STATE_PASSIVE:
 			select {
-			case orderBackup = <- masterSync:
-			default:			
+			case orderList = <-syncChan:
+			default:
 			}
 		case STATE_GO_ACTIVE:
 			//transition from passive to active
-			go active(orderChan, unitChan, sync, interCom, quit)
+			go active(quit)
 			fallthrough
 		case STATE_ACTIVE:
 			//handle sync
-			masterSync <- orderBackup
+			select {
+			case <-syncTimer:
+				syncChan <- orderList
+			}
 		case STATE_QUIT:
 			//do quit stuff
 		default:
 		}
 	}
 
-		/*
-			- Hvem er på nettverket?
-			- Lag lister over heiser og mastere
-			- Sjekk om jeg er sjef? Hvis ikke, hopp fram til **
-			- Be om status fra alle heiser
-			**
-			
+	/*
+		- Hvem er på nettverket?
+		- Lag lister over heiser og mastere
+		- Sjekk om jeg er sjef? Hvis ikke, hopp fram til **
+		- Be om status fra alle heiser
+		**
 
 
-		*/
+
+	*/
 
 }
 
-func active(orders chan OrderType, units chan UnitType, interCom chan map[UnitID]TimedOrder, quit chan bool) { // not finished
+func active(quit chan bool) { // not finished
+	reportNum := 0
+	orderNum := 0
+
 	elevReports := make(map[UnitID]StatusType)
-	orderList := <- interCom // provided from backup
+
+	statusReqChan := make(chan int) //to request reports with id
+	statusChan := make(chan StatusType)
+	orderChan := make(chan OrderType)
+	unitChan := make(chan UnitType)
 
 	reportTime := time.Tick(REPORT_INTERVALL * time.Second)
 
 	for {
 		select {
-		case unit := <- unitChan:
+		case unit := <-unitChan:
 			unitHandler(unit)
-		case order := <- orderChan:
-			timedOrder := TimedOrder{order}
-			if order.New {
-				orderList[timedOrder.ID] = timedOrder
-			} else {
-				delete(orderList,timedOrder.ID)
-			}
-			interCom <- orderList
-		case <- reportTime:
-			elevReports = getElevStatus()
-		case <- quit:
+		case order := <-orderChan:
+			//handle orders
+			orderCapsule := masterOrder{order}
+		case report <- statusChan:
+			//handle reports
+		case <-reportTime:
+			rmDeadUnits(elevReports, reportNum)
+			reportNum++
+			statusReqChan <- reportNum
+		case <-quit:
 			//do quit stuff
 		default:
-			for key, order := range(orderList) {
+			for key, order := range orderList {
 				// BLI ENIGE OM MASTER SKAL HOLDE TID. TRUR EGENTLIG DET ER NETWORK INTERFACE MAT.
+			}
 		}
 	}
 }
 
-
-func init(unitStatusChan chan UnitType, sync chan Queue) {
-	// broadcast "I'm here" NYI
-	//start network interface w/channels NYI
+func init(syncChan chan [][]masterOrder) int {
+	id, numFloors = networkinterface.masterInit()
+	orderList = [numFloors][2]masterOrder{}
 
 	timeOut := time.After(INITIALIATION_WAIT_TIME * time.Second)
 
 	done := false
 	for done != true {
 		select {
-		case unit := <- unitStatusChan:
-			unitHandler(unit)
-		case orderList := <- sync:
-			copy(masterOrderList, orderList)
-		case <- timeOut:
+		case orderList = <-sync:
+		case <-timeOut:
 			done = true
 		}
 	}
-	unitID = getUnitID()  //asks network interface for an ID 
-	
+
 	if ckeckIfActive() {
 		go active(orderChan, unitChan, elevStatusChan, masterSync, quit)
 		return STATE_ACTIVE
 	} else {
-		go passive(masterSync, quit)
 		return STATE_PASSIVE
 	}
 }
-func getState(lastState int) {
+
+func getState(lastState int) int {
 	// get and return STATE_QUIT when quit flag is raised NYI
 	if checkIfActive() {
 		if lastState == STATE_ACTIVE {
@@ -158,9 +167,9 @@ func getState(lastState int) {
 }
 
 func checkIfActive() bool {
-	for _, unit := range(unitList) {
+	for _, unit := range unitList {
 		if unit.Type == TYPE_MASTER {
-			if unitID > unit.Port {
+			if id > unit.ID {
 				return false
 			}
 		}
@@ -168,35 +177,31 @@ func checkIfActive() bool {
 	return true
 }
 
-func unitHandler(unit UnitType) {
+func unitHandler(unit UnitType, add bool) {
 	newUnit := true
-		for _, u = range(unitList){
-			if u.Port == unit.Port {
-				newUnit = false
-				break
-			}
-		}
-		if(newUnit) {
-			unitList = append(unitlsit, unit)
-		}
-}
-
-func getElevStatus() map[UnitID]StatusType {
-	elevReports := map[UnitID]StatusType{}
-	statusChan := make(chan StatusType)
-	i := 0
-	length := len(unitList)
-
-	for i < length{
-		//getReport(unit, statusChan) // Should send empty report if timeout
-		report := <- statusChan
-		if report.ID == "" {
-			unitList = append(unitList[:i],unitList[i+1:]...) //deletes unit from list
-			length--
-		} else {
-			elevReports[report.ID] = report
-			i++
+	for _, u = range unitList {
+		if u.ID == unit.ID {
+			newUnit = false
+			break
 		}
 	}
-	return elevReports
+	if newUnit {
+		unitList = append(unitList, unit)
+	}
+}
+
+func rmDeadUnits(list map[UnitID]StatusType, num int) {
+	deadUnits := make([]UnitID, 0, len(unitList))
+	for id, report := range elevReport {
+		if report.ID != num {
+			deadUnits = append(deadUnits, id)
+		}
+	}
+	for i, unit := range unitList {
+		for _, id := range deadUnits {
+			if unit.ID == id {
+				unitList = append(unitList[:i], unitList[i+1:]...)
+			}
+		}
+	}
 }
