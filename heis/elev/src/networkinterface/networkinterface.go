@@ -9,12 +9,19 @@ import (
 
 //abortChan, allocateOrdersChan, executedOrdersChan, extLightsChan, extReportChan, elevStatusChan
 
-var TIMEOUT = false
+//Variables
+
+var Name UnitID
 var messageTimedOut = 0
 var RESEND_TIME = 10 * time.Millisecond
 var TIMOUT_TIME = 95 * time.Millisecond
 
-func ElevNetworkinterface(quitChan chan bool, allocateOrdersChan chan OrderType, executedOrdersChan chan OrderType, extLightsChan chan [][]bool, setLightsChan chan OrderType, buttonPressesChan chan OrderType, elevStatusChan chan StatusType) {
+var TxPort = 20014
+var RxPort = 30014
+
+var TIMEOUT = false
+
+func ElevInit(quitChan chan bool, allocateOrdersChan chan OrderType, executedOrdersChan chan OrderType, extLightsChan chan [][]bool, setLightsChan chan OrderType, buttonPressesChan chan OrderType, elevStatusChan chan StatusType) {
 	/*
 		- absorb Status messages
 		- pick up executed orders, if timeout, bounce back to BI
@@ -22,13 +29,11 @@ func ElevNetworkinterface(quitChan chan bool, allocateOrdersChan chan OrderType,
 		- make extLights matrix and pass along
 	*/
 
-	ID := "Jarvis"
-	TxPort := 30014
-	RxPort := 30014
+	Name = "Jarvis"
 
 	statusTxChan := make(chan StatusType)
-	statusReqRxChan := make(chan bool)
-	statusAckRxChan := make(chan bool)
+	statusReqRxChan := make(chan int)
+	statusAckRxChan := make(chan int)
 
 	buttonPressTxChan := make(chan OrderType)
 	buttonAckRxChan := make(chan bool)
@@ -39,23 +44,52 @@ func ElevNetworkinterface(quitChan chan bool, allocateOrdersChan chan OrderType,
 	executedOrdersAckRxChan := make(chan bool)
 
 	newOrdersRxChan := make(chan OrderType)
-	newOrderAckChan := make(chan bool)
+	ackRxChan := make(chan AckType)
+	ackTxChan := make(chan AckType)
 
 	go bcast.Transmitter(TxPort, statusTxChan, buttonPressTxChan, executedOrdersTxChan, ackTxChan)
 	go bcast.Receiver(RxPort, statusReqRxChan, extLightsRxChan, newOrdersRxChan, ackRxChan)
 
-	go answerStatusCall(statusTxChan, statusReqRxChan, elevStatusChan, statusAckRxChan, quitChan)
-	go transmitButtonPress(buttonPressesChan, buttonPressTxChan, buttonAckRxChan, allocateOrders, setLightsChan, quitChan)
-	go transmitExecOrders(executedOrdersChan, executedOrdersTxChan, executedOrdersAckRxChan, quitChan)
-	go receiveNewOrder(allocateOrdersChan, newOrdersRxChan, newOrderAckChan, quitChan)
-	go receiveExtLights(extLightsRxChan, extLightsChan, quitChan)
+	go elevReceiveAck(ackRxChan, statusReqRxChan, statusAckRxChan, buttonAckRxChan, executedOrdersAckRxChan, quitChan)
+	go elevAnswerStatusCall(statusTxChan, statusReqRxChan, elevStatusChan, statusAckRxChan, quitChan)
+	go elevTransmitButtonPress(buttonPressesChan, buttonPressTxChan, buttonAckRxChan, allocateOrders, setLightsChan, quitChan)
+	go elevTransmitExecOrders(executedOrdersChan, executedOrdersTxChan, executedOrdersAckRxChan, quitChan)
+	go elevReceiveNewOrder(allocateOrdersChan, newOrdersRxChan, newOrderAckChan, quitChan)
+	go elevReceiveExtLights(extLightsRxChan, extLightsChan, quitChan)
 }
 
-func answerStatusCall(statusTxChan chan StatusType, statusReqRxChan chan bool, elevStatusChan chan StatusType, statusAckRxChan chan bool, quitChan chan bool) {
+func elevReceiveAck(AckRxChan chan AckType, statusReqRxChan chan int, statusAckRxChan chan bool, buttonAckRxChan chan bool, executedOrdersAckRxChan chan bool, quitChan chan bool) {
+	var AckRec AckType
+	for {
+		select {
+		case <-quitChan:
+			return
+		case AckRec = <-AckRxChan:
+			if AckRec.Type == "Status" && AckRec.ID > 0 {
+				statusReqRxChan <- AckRec.ID
+			}
+			if AckRec.To == Name {
+
+				switch AckRec.Type {
+				case "Status":
+					statusAckRxChan <- AckRec.ID
+				case "ButtonPress":
+					buttonAckRxChan <- true
+				case "ExecOrder":
+					executedOrdersAckRxChan <- true
+				default:
+				}
+			}
+		}
+	}
+}
+
+func elevAnswerStatusCall(statusTxChan chan StatusType, statusReqRxChan chan bool, elevStatusChan chan StatusType, statusAckRxChan chan bool, quitChan chan bool) {
 
 	var status StatusType
-	var statusReq bool
+	var statusReq int
 	var sending bool
+	var ackStat AckType
 
 	for {
 
@@ -69,6 +103,12 @@ func answerStatusCall(statusTxChan chan StatusType, statusReqRxChan chan bool, e
 
 			// Get current status
 			status = <-elevStatusChan
+
+			//Add name to status
+			status.From = Name
+
+			//Add status itteration ID
+			status.ID = statusReq
 
 			// Move current status into transmit channel
 			statusTxChan <- status
@@ -86,7 +126,7 @@ func answerStatusCall(statusTxChan chan StatusType, statusReqRxChan chan bool, e
 					messageTimedOut++
 					fallthrough
 
-				case <-statusAckRxChan:
+				case ackStat = <-statusAckRxChan:
 					timeoutTimer.Stop()
 					resendTimer.Stop()
 					sending = false
@@ -103,7 +143,7 @@ func answerStatusCall(statusTxChan chan StatusType, statusReqRxChan chan bool, e
 	}
 }
 
-func transmitButtonPress(buttonPressChan chan OrderType, buttonPressTxChan chan OrderType, buttonAckRxChan chan bool, allocateOrdersChan chan OrderType, setLightsChan chan OrderType, quitChan chan bool) {
+func elevAtransmitButtonPress(buttonPressChan chan OrderType, buttonPressTxChan chan OrderType, buttonAckRxChan chan bool, allocateOrdersChan chan OrderType, setLightsChan chan OrderType, quitChan chan bool) {
 
 	var buttonPress OrderType
 	var sending bool
@@ -137,7 +177,6 @@ func transmitButtonPress(buttonPressChan chan OrderType, buttonPressTxChan chan 
 				select {
 
 				case <-timeoutTimer.C:
-
 					allocateOrdersChan <- buttonPress
 					setLightsChan <- buttonPress
 					messageTimedOut++
@@ -160,7 +199,7 @@ func transmitButtonPress(buttonPressChan chan OrderType, buttonPressTxChan chan 
 	}
 }
 
-func transmitExecOrders(executedOrdersChan chan OrderType, executedOrdersTxChan chan OrderType, executedOrdersAckRxChan chan bool, quitChan chan bool) {
+func elevTransmitExecOrders(executedOrdersChan chan OrderType, executedOrdersTxChan chan OrderType, executedOrdersAckRxChan chan bool, quitChan chan bool) {
 
 	var executedOrder OrderType
 	var sending bool
@@ -206,20 +245,32 @@ func transmitExecOrders(executedOrdersChan chan OrderType, executedOrdersTxChan 
 	}
 }
 
-func receiveNewOrder(allocateOrdersChan chan OrderType, newOrdersRxChan chan OrderType, newOrderAckChan chan bool, quitChan chan bool) {
+func elevReceiveNewOrder(allocateOrdersChan chan OrderType, newOrdersRxChan chan OrderType, ackTxChan chan AckType, quitChan chan bool) {
+	var newOrderAck AckType
+	newOrderAck.From = Name
+	newOrderAck.Type = "Order"
 
 	for {
 		select {
 		case <-quitChan:
 			return
+
+		case newOrder := <-newOrdersRxChan:
+			if newOrder.To != Name {
+				break
+			}
+
+			newOrderAck.ID = newOrder.ID
+			ackTxChan <- newOrderAck
+
+			allocateOrdersChan <- newOrder
+
 		default:
-			allocateOrdersChan <- newOrdersRxChan
-			newOrderAckChan <- true
 		}
 	}
 }
 
-func receiveExtLights(extLightsRxChan chan [][]bool, extLightsChan chan [][]bool, quitChan chan bool) {
+func elevReceiveExtLights(extLightsRxChan chan [][]bool, extLightsChan chan [][]bool, quitChan chan bool) {
 
 	for {
 		select {

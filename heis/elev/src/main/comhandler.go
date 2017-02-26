@@ -5,7 +5,7 @@ import (
 	. "typedef"
 	//"log"
 	"dummynetworkinterface"
-	"time"
+	//"time"
 )
 
 func main() {
@@ -15,18 +15,16 @@ func main() {
 	setLightsChan := make(chan OrderType, 100)      //Drive -> ButtonInterface: Clear lights after executed orders
 	extLightsChan := make(chan [][]bool, 1)         //NetworkInterface -> ButtonInterface: Update external lights according to Master list
 	elevStatusChan := make(chan StatusType, 1)      //Drive -> NetworkInterface: Report elevator status to Master
-	initChan := make(chan int, 1)                   //Drive -> ButtonInterface: ButtonInterface waits for Drive to run ElevInit() and pass number of floors
-	abortChan := make(chan bool, 1)                 //All -> All: If value is true, all channels abort
+	initChan := make(chan bool, 1)                  //Drive -> ButtonInterface: ButtonInterface waits for Drive to run ElevInit() and pass number of floors
+	quitChan := make(chan bool)                     //All -> All: If value is true, all channels abort
 
-	abortFlag := false
-	abortChan <- abortFlag
-	//Pass all as pointers?
-	go elevdriver.Drive(abortChan, allocateOrdersChan, executedOrdersChan, elevStatusChan, setLightsChan, initChan)
-	go elevdriver.ButtonInterface(abortChan, extLightsChan, setLightsChan, buttonPressesChan, allocateOrdersChan, initChan)
-	go dummynetworkinterface.DummyNetworkinterface(abortChan, allocateOrdersChan, executedOrdersChan, extLightsChan, setLightsChan, buttonPressesChan, elevStatusChan)
+	go elevdriver.Drive(quitChan, allocateOrdersChan, executedOrdersChan, elevStatusChan, setLightsChan, initChan)
+	go elevdriver.ButtonInterface(quitChan, extLightsChan, setLightsChan, buttonPressesChan, allocateOrdersChan, initChan)
+	go dummynetworkinterface.DummyNetworkinterface(quitChan, allocateOrdersChan, executedOrdersChan, extLightsChan, setLightsChan, buttonPressesChan, elevStatusChan)
 
-	for abortFlag != true {
-		abortFlag = CheckAbortFlag(abortChan)
-		time.Sleep(time.Second)
+	for {
+		if false {
+			close(quitChan)
+		}
 	}
 }

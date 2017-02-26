@@ -1,8 +1,10 @@
 package typedef
 
 type OrderType struct {
-	To    unitType
-	From  unitType
+
+	To    unitID
+	From  unitID
+	ID    int
 	Floor int
 	Dir   int
 	New   bool
@@ -23,6 +25,17 @@ type StatusType struct {
 type UnitType struct {
 	Type int
 	ID   UnitID
+
+type ExtReport struct {
+	internalStatus StatusType
+	newOrders      []OrderType
+}
+
+type AckType struct {
+	To   UnitID
+	From UnitID
+	Type string
+	ID   int
 }
 
 type ElevError struct {
