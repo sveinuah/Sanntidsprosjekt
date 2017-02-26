@@ -2,18 +2,16 @@ package elevdriver
 
 import (
 	. "elevio"
+	"fmt"
 	. "typedef"
 )
 
 var lights [4][3]bool
 
-func ButtonInterface(abortChan chan bool, extLightsChan chan [][]bool, setLightsChan chan OrderType, buttonPressesChan chan OrderType, allocateOrdersChan chan OrderType, initChan chan int) {
-	numFloors := buttonInterfaceInit(initChan)
-
-	abortFlag := false
-	for abortFlag != true {
+func ButtonInterface(quitChan chan bool, extLightsChan chan [][]bool, setLightsChan chan OrderType, buttonPressesChan chan OrderType, allocateOrdersChan chan OrderType, initChan chan bool) {
+	for {
 		//Get new button presses and send order up/to drive
-		for floor := 0; floor < numFloors; floor++ {
+		for floor := 0; floor < N_FLOORS; floor++ {
 			for dir := 0; dir < 3; dir++ {
 				if ElevGetButtonSignal(floor, dir) == true && lights[floor][dir] == false { //Make variable lightList or read hardware each time?
 					var order OrderType
@@ -31,7 +29,7 @@ func ButtonInterface(abortChan chan bool, extLightsChan chan [][]bool, setLights
 		//Copy extLights from master if new in channel, set/clear lights that are wrong
 		select {
 		case extLights := <-extLightsChan:
-			for floor := 0; floor < numFloors; floor++ {
+			for floor := 0; floor < N_FLOORS; floor++ {
 				for dir := 0; dir < 2; dir++ {
 					if lights[floor][dir] != extLights[floor][dir] {
 						ElevButtonLight(floor, dir, extLights[floor][dir])
@@ -52,13 +50,17 @@ func ButtonInterface(abortChan chan bool, extLightsChan chan [][]bool, setLights
 				ordersInChannel = false
 			}
 		}
-		abortFlag = CheckAbortFlag(abortChan)
+		select {
+		case <-quitChan:
+			fmt.Println("BI Abort!!!")
+			return
+		default:
+		}
 	}
 }
 
-func buttonInterfaceInit(initChan chan int) int {
-	numFloors := <-initChan
-	//wait for drive to run elevInit, return numFloors
+func buttonInterfaceInit(initChan chan int) {
+	<-initChan
+	//wait for drive to run elevInit, return N_FLOORS
 	lights = [N_FLOORS][3]bool{{false}}
-	return numFloors
 }
