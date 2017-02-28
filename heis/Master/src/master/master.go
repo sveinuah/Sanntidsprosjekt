@@ -37,8 +37,8 @@ var orderList [][]masterOrder //numFloors+2directions
 
 type masterOrder struct {
 	OrderType
-	timeStamp   time.Time
-	arrivalTime time.Time
+	Delegated time.Time
+	Estimated time.Time
 }
 
 func main() {
@@ -75,6 +75,7 @@ func main() {
 			}
 		case STATE_QUIT:
 			//do quit stuff
+			close(quit)
 		default:
 		}
 	}
@@ -93,37 +94,51 @@ func main() {
 }
 
 func active(quit chan bool) { // not finished
-	reportNum := 0
-	orderNum := 0
+	reportNum := 1
+	orderNum := 1 //move to go-routine giving orders
 
 	elevReports := make(map[UnitID]StatusType)
 
 	statusReqChan := make(chan int) //to request reports with id
 	statusChan := make(chan StatusType)
-	orderChan := make(chan OrderType)
 	unitChan := make(chan UnitType)
+
+	go orders(elevReports, quit)
 
 	reportTime := time.Tick(REPORT_INTERVALL * time.Second)
 
 	for {
 		select {
 		case unit := <-unitChan:
-			unitHandler(unit)
-		case order := <-orderChan:
-			//handle orders
-			orderCapsule := masterOrder{order}
+			addUnit(unit)
 		case report <- statusChan:
-			//handle reports
+			elevReports[report.From] = report
 		case <-reportTime:
-			rmDeadUnits(elevReports, reportNum)
+			handleDeadUnits(elevReports, reportNum)
 			reportNum++
 			statusReqChan <- reportNum
+		case err <- errChan:
+			//handleErr
 		case <-quit:
 			//do quit stuff
 		default:
-			for key, order := range orderList {
-				// BLI ENIGE OM MASTER SKAL HOLDE TID. TRUR EGENTLIG DET ER NETWORK INTERFACE MAT.
-			}
+		}
+	}
+}
+
+func orders(reports *map[UnitID]StatusType, quit chan bool) {
+	orderRx := make(chan OrderType)
+	orderTx := make(chan OrderType)
+
+	for {
+		select {
+		case order := <-orderRx:
+			orderCapsule := masterOrder{order}
+			handleOrder(orderCapsule)
+		case <-quit:
+			//quit
+		default:
+			//delegate orders
 		}
 	}
 }
@@ -177,7 +192,7 @@ func checkIfActive() bool {
 	return true
 }
 
-func unitHandler(unit UnitType, add bool) {
+func addUnit(unit UnitType) {
 	newUnit := true
 	for _, u = range unitList {
 		if u.ID == unit.ID {
@@ -190,9 +205,9 @@ func unitHandler(unit UnitType, add bool) {
 	}
 }
 
-func rmDeadUnits(list map[UnitID]StatusType, num int) {
+func handleDeadUnits(list map[UnitID]StatusType, num int) {
 	deadUnits := make([]UnitID, 0, len(unitList))
-	for id, report := range elevReport {
+	for id, report := range list {
 		if report.ID != num {
 			deadUnits = append(deadUnits, id)
 		}
@@ -204,4 +219,14 @@ func rmDeadUnits(list map[UnitID]StatusType, num int) {
 			}
 		}
 	}
+}
+
+func handleOrder(o masterOrder) {
+	if o.New {
+		if orderList[o.Floor][o.Dir] == nil {
+			orderList[o.Floor][o.Dir] = o
+		}
+		return
+	}
+	orderList[o.Floor][o.Dir] = masterOrder{}
 }

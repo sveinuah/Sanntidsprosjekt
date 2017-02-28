@@ -25,13 +25,9 @@ type StatusType struct {
 type UnitType struct {
 	Type int
 	ID   UnitID
-
-type ExtReport struct {
-	internalStatus StatusType
-	newOrders      []OrderType
 }
 
-type AckType struct {
+type AckType struct { //Jeg vil at du skal ha denne i nettwork Interface --Schwung
 	To   UnitID
 	From UnitID
 	Type string
@@ -43,13 +39,8 @@ type ElevError struct {
 	errStr  string
 }
 
-func (e *ElevError) Error() string {
-	return e.errStr
-}
-
-func (e *ElevError) ErrorCode() int {
-	return e.errCode
-}
+func (e ElevError) Error() string {return e.errStr}
+func (e ElevError) ErrorCode() int {return e.errCode}
 
 const (
 	DIR_UP    int = 0
