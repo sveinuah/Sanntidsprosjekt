@@ -51,7 +51,7 @@ func ElevInit() int {
 
 func ElevMotorDirection(dir int) {
 	if dir == DIR_NODIR {
-		IoWriteAnalog(MOTOR, 0)
+		IoWriteAnalog(MOTOR, DIR_NODIR)
 	} else if dir == DIR_UP {
 		IoClearBit(MOTORDIR)
 		IoWriteAnalog(MOTOR, motorSpeed)
