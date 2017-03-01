@@ -4,7 +4,6 @@ type OrderType struct {
 
 	To    unitID
 	From  unitID
-	ID    int
 	Floor int
 	Dir   int
 	New   bool
@@ -18,7 +17,7 @@ type StatusType struct {
 	CurrentFloor int
 	Direction    int
 	Running      bool
-	MyOrders     [4][3]bool //floor, dir
+	MyOrders     [][]bool //floor, dir
 	DoorOpen     bool
 }
 
