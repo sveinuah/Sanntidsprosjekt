@@ -12,8 +12,6 @@ const (
 	INITIALIATION_WAIT_TIME int = 3   // in seconds
 	REPORT_INTERVALL        int = 2   //in seconds
 
-	ORDER_NOT_DELEGATED		int = 0
-
 	STATE_GO_ACTIVE  int = 0
 	STATE_ACTIVE     int = 1
 	STATE_GO_PASSIVE int = 2
@@ -65,7 +63,6 @@ func main() {
 			default:
 			}
 		case STATE_QUIT:
-			//do quit stuff
 			fmt.Println("Quitting")
 			close(quit)
 			return
@@ -239,4 +236,15 @@ func handleNewOrder(o masterOrder) {
 	if o.To == 
 	orderList[o.Floor][o.Dir] = masterOrder{} //clear order
 	lights[o.Floor][o.Dir] = false
+}
+
+func findAppropriate(o masterOrder) {
+	for i, unit := range units.Peers {
+		//For testing purposes--------------------------
+		if unit.Type == TYPE_SLAVE {
+			return unit.ID, time.Now().Add(10*time.Second)
+		}
+		//----------------------------------------------
+	}
+	return id, time.Time{} //bounce back to myself
 }

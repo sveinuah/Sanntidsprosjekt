@@ -52,4 +52,6 @@ const (
 	DIR_NODIR int    = 2
 	MASTER    string = "1"
 	SLAVE     string = "2"
+	TYPE_MASTER int  = 1
+	TYPE_SLAVE int   = 2
 )
