@@ -3,26 +3,32 @@ package elevdriver
 import (
 	. "elevio"
 	"fmt"
+	"time"
 	. "typedef"
 )
 
+const DIR_INTERNAL = 2
+
 var lights [4][3]bool
+var buttonSent [4][3]bool
 
 func ButtonInterface(quitChan chan bool, extLightsChan chan [][]bool, setLightsChan chan OrderType, buttonPressesChan chan OrderType, allocateOrdersChan chan OrderType, initChan chan bool) {
 	for {
 		//Get new button presses and send order up/to drive
 		for floor := 0; floor < N_FLOORS; floor++ {
 			for dir := 0; dir < 3; dir++ {
-				if ElevGetButtonSignal(floor, dir) == true && lights[floor][dir] == false { //Make variable lightList or read hardware each time?
+				if ElevGetButtonSignal(floor, dir) == true && lights[floor][dir] == false && buttonSent[floor][dir] == false {
 					var order OrderType
 					order.Floor = floor
 					order.Dir = dir
 					order.New = true
-					buttonPressesChan <- order
-					if order.Dir == DIR_NODIR {
+					if order.Dir == DIR_INTERNAL {
 						ElevButtonLight(order.Floor, order.Dir, order.New)
 						allocateOrdersChan <- order
+					} else {
+						buttonPressesChan <- order
 					}
+					buttonSent[floor][dir] = true
 				}
 			}
 		}
@@ -34,6 +40,7 @@ func ButtonInterface(quitChan chan bool, extLightsChan chan [][]bool, setLightsC
 					if lights[floor][dir] != extLights[floor][dir] {
 						ElevButtonLight(floor, dir, extLights[floor][dir])
 						lights[floor][dir] = extLights[floor][dir]
+						buttonSent[floor][dir] = false
 					}
 				}
 			}
@@ -46,6 +53,7 @@ func ButtonInterface(quitChan chan bool, extLightsChan chan [][]bool, setLightsC
 			case order := <-setLightsChan:
 				ElevButtonLight(order.Floor, order.Dir, order.New)
 				lights[order.Floor][order.Dir] = order.New
+				buttonSent[order.Floor][order.Dir] = false
 			default:
 				ordersInChannel = false
 			}
@@ -56,6 +64,7 @@ func ButtonInterface(quitChan chan bool, extLightsChan chan [][]bool, setLightsC
 			return
 		default:
 		}
+		time.Sleep(200 * time.Millisecond)
 	}
 }
 
