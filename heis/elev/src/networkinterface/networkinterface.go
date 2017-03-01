@@ -2,6 +2,7 @@ package networkinterface
 
 import (
 	"../networkmodule/bcast"
+	"../networkmodule/peers"
 	. "../typedef"
 	"fmt"
 	"time"
@@ -18,6 +19,7 @@ var TIMOUT_TIME = 95 * time.Millisecond
 
 var TxPort = 20014
 var RxPort = 30014
+var peersComPort = 40014
 
 var TIMEOUT = false
 
@@ -47,6 +49,8 @@ func ElevInit(quitChan chan bool, allocateOrdersChan chan OrderType, executedOrd
 	ackRxChan := make(chan AckType)
 	ackTxChan := make(chan AckType)
 
+	go peers.Transmitter(peersComPort, Name+":"+SLAVE, transmitEnable)
+
 	go bcast.Transmitter(TxPort, statusTxChan, buttonPressTxChan, executedOrdersTxChan, ackTxChan)
 	go bcast.Receiver(RxPort, statusReqRxChan, extLightsRxChan, newOrdersRxChan, ackRxChan)
 
@@ -56,6 +60,19 @@ func ElevInit(quitChan chan bool, allocateOrdersChan chan OrderType, executedOrd
 	go elevTransmitExecOrders(executedOrdersChan, executedOrdersTxChan, executedOrdersAckRxChan, quitChan)
 	go elevReceiveNewOrder(allocateOrdersChan, newOrdersRxChan, newOrderAckChan, quitChan)
 	go elevReceiveExtLights(extLightsRxChan, extLightsChan, quitChan)
+}
+
+func timeoutHandle(quitChan chan bool) {
+	for {
+		select {
+		case <-quitChan:
+		default:
+			if messageTimedOut >= 1 {
+				TIMEOUT = true
+				messageTimedOut = 0
+			}
+		}
+	}
 }
 
 func elevReceiveAck(AckRxChan chan AckType, statusReqRxChan chan int, statusAckRxChan chan bool, buttonAckRxChan chan bool, executedOrdersAckRxChan chan bool, quitChan chan bool) {
@@ -143,7 +160,7 @@ func elevAnswerStatusCall(statusTxChan chan StatusType, statusReqRxChan chan boo
 	}
 }
 
-func elevAtransmitButtonPress(buttonPressChan chan OrderType, buttonPressTxChan chan OrderType, buttonAckRxChan chan bool, allocateOrdersChan chan OrderType, setLightsChan chan OrderType, quitChan chan bool) {
+func elevTransmitButtonPress(buttonPressChan chan OrderType, buttonPressTxChan chan OrderType, buttonAckRxChan chan bool, allocateOrdersChan chan OrderType, setLightsChan chan OrderType, quitChan chan bool) {
 
 	var buttonPress OrderType
 	var sending bool
@@ -248,7 +265,7 @@ func elevTransmitExecOrders(executedOrdersChan chan OrderType, executedOrdersTxC
 func elevReceiveNewOrder(allocateOrdersChan chan OrderType, newOrdersRxChan chan OrderType, ackTxChan chan AckType, quitChan chan bool) {
 	var newOrderAck AckType
 	newOrderAck.From = Name
-	newOrderAck.Type = "Order"
+	newOrderAck.Type = "Order Received"
 
 	for {
 		select {
@@ -260,9 +277,7 @@ func elevReceiveNewOrder(allocateOrdersChan chan OrderType, newOrdersRxChan chan
 				break
 			}
 
-			newOrderAck.ID = newOrder.ID
 			ackTxChan <- newOrderAck
-
 			allocateOrdersChan <- newOrder
 
 		default:
