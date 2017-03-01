@@ -22,7 +22,7 @@ type StatusType struct {
 	CurrentFloor int
 	Direction    int
 	Running      bool
-	MyOrders     [4][3]bool //floor, dir
+	MyOrders     [][]bool //floor, dir
 	DoorOpen     bool
 }
 
@@ -53,9 +53,3 @@ const (
 	MASTER    string = "1"
 	SLAVE     string = "2"
 )
-
-func CheckAbortFlag(abortChan chan bool) bool {
-	abortFlag := <-abortChan
-	abortChan <- abortFlag
-	return abortFlag
-}
