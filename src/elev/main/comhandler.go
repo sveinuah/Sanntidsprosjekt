@@ -1,10 +1,10 @@
 package main
 
 import (
-	"elevdriver"
+	"elev/elevdriver"
 	. "typedef"
 	//"log"
-	"elevnetworkinterface"
+	"elev/elevnetworkinterface"
 	//"time"
 )
 
@@ -29,3 +29,5 @@ func main() {
 		}
 	}
 }
+
+//Fix buffers

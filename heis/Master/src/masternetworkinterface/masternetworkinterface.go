@@ -1,10 +1,10 @@
 package networkinterface
 
 import (
-	"../networkmodule/bcast"
-	. "../typedef"
 	"fmt"
+	"networkmodule/bcast"
 	"time"
+	. "typedef"
 )
 
 //abortChan, allocateOrdersChan, executedOrdersChan, extLightsChan, extReportChan, elevStatusChan
