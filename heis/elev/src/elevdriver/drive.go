@@ -16,6 +16,7 @@ const (
 
 func Drive(quitChan chan bool, allocateOrdersChan chan OrderType, executedOrdersChan chan OrderType, elevStatusChan chan StatusType, setLightsChan chan OrderType, initChan chan bool) {
 	driveInit(initChan)
+	fmt.Println("Initialized!!!")
 	for {
 		getOrders(allocateOrdersChan)
 		//Check floor and see if elev should stop here, move in either direction or stay put
@@ -56,7 +57,7 @@ func driveInit(initChan chan bool) {
 	ElevInit()
 	initChan <- true
 	ElevMotorDirection(DIR_UP)
-	for ElevGetFloorSensorSignal() == -1 {
+	for ElevGetFloorSensorSignal() == BETWEEN_FLOORS {
 
 	}
 	status.CurrentFloor = ElevGetFloorSensorSignal()
@@ -75,19 +76,44 @@ func getOrders(allocateOrdersChan chan OrderType) {
 	}
 }
 
+func stopRoutine(executedOrdersChan chan OrderType, setLightsChan chan OrderType, allocateOrdersChan chan OrderType) {
+	ElevMotorDirection(DIR_NODIR)
+	status.Running = false
+	ElevDoorOpenLight(true)
+	status.DoorOpen = true
+	status.Direction = determineDirection()
+	fmt.Println(status.Direction)
+	clearOrder(executedOrdersChan, setLightsChan)
+
+	doorTimer := time.NewTimer(DOOR_OPEN_TIME)
+	//dirSet := false
+	for status.DoorOpen == true {
+		select {
+		case <-doorTimer.C:
+			doorTimer.Stop()
+			ElevDoorOpenLight(false)
+			status.DoorOpen = false
+			time.Sleep(100 * time.Millisecond)
+		default:
+			getOrders(allocateOrdersChan)
+			if checkIfStop() {
+				clearOrder(executedOrdersChan, setLightsChan)
+				doorTimer.Reset(DOOR_OPEN_TIME)
+			}
+		}
+	}
+
+}
+
 func checkIfStop() bool {
 	var relevantDirs []int
 	switch status.Direction { //Only clear orders if not continuing in this direction
 	case DIR_UP:
 		relevantDirs = []int{DIR_UP, DIR_NODIR}
 	case DIR_DOWN:
-		if checkOrdersBelow(status.CurrentFloor) == false {
-			relevantDirs = []int{DIR_UP, DIR_DOWN, DIR_NODIR}
-		} else {
-			relevantDirs = []int{DIR_DOWN, DIR_NODIR}
-		}
+		relevantDirs = []int{DIR_DOWN, DIR_NODIR}
 	case DIR_NODIR:
-		relevantDirs = []int{DIR_UP, DIR_DOWN, DIR_NODIR}
+		relevantDirs = []int{DIR_NODIR} //DIR_UP, DIR_DOWN,
 	}
 	for dir := 0; dir < len(relevantDirs); dir++ {
 		if status.MyOrders[status.CurrentFloor][relevantDirs[dir]] == true {
@@ -97,72 +123,11 @@ func checkIfStop() bool {
 	return false
 }
 
-func determineDirection() int {
-	switch status.Direction {
-	case DIR_UP:
-		if checkOrdersAbove(status.CurrentFloor) == true {
-
-			fmt.Println("bump")
-			return DIR_UP
-		}
-	case DIR_DOWN:
-		if checkOrdersBelow(status.CurrentFloor) == true {
-			return DIR_DOWN
-		}
-	default:
-		if checkOrdersAbove(status.CurrentFloor) == true {
-			return DIR_UP
-		} else if checkOrdersBelow(status.CurrentFloor) == true {
-			return DIR_DOWN
-		}
-	}
-	return DIR_NODIR
-}
-
-func stopRoutine(executedOrdersChan chan OrderType, setLightsChan chan OrderType, allocateOrdersChan chan OrderType) {
-	ElevMotorDirection(DIR_NODIR)
-	status.Running = false
-	ElevDoorOpenLight(true)
-	status.DoorOpen = true
-	clearOrder(executedOrdersChan, setLightsChan)
-
-	doorTimer := time.NewTimer(DOOR_OPEN_TIME)
-	for status.DoorOpen == true {
-		select {
-		case <-doorTimer.C:
-			doorTimer.Stop()
-			ElevDoorOpenLight(false)
-			status.DoorOpen = false
-		default:
-			getOrders(allocateOrdersChan)
-			if checkIfStop() {
-				clearOrder(executedOrdersChan, setLightsChan)
-				doorTimer.Reset(DOOR_OPEN_TIME)
-			}
-		}
-	}
-	/*
-		//If idle and called by external button: set direction this way
-		if status.Direction == DIR_NODIR {
-			if status.MyOrders[status.CurrentFloor][DIR_UP] == true {
-				status.Direction = DIR_UP
-			} else if status.MyOrders[status.CurrentFloor][DIR_DOWN] == true {
-				status.Direction = DIR_DOWN
-			}
-		}
-	*/
-
-}
-
-//Heis clearer ikke ordre i nederste og øverste etasje hvis den er på vei ned, men
-//Bør kontinuerlig cleare ordre i den etasjen man står i?
-//Kommer til en ny etasje: Sjekk om det er flere ordre lenger fram - hvis ikke, snu retning og clear ordre den veien også
-
 func run(dir int) {
 	switch dir {
 	case DIR_NODIR:
 		if status.Running == true {
-			ElevMotorDirection(0)
+			ElevMotorDirection(DIR_NODIR)
 			status.Running = false
 		}
 	default:
@@ -172,6 +137,33 @@ func run(dir int) {
 		}
 	}
 	status.Direction = dir
+}
+
+func determineDirection() int {
+	above := checkOrdersAbove(status.CurrentFloor)
+	below := checkOrdersBelow(status.CurrentFloor)
+	switch status.Direction {
+	case DIR_UP:
+		if above == true || status.MyOrders[status.CurrentFloor][DIR_UP] == true {
+			return DIR_UP
+		}
+	case DIR_DOWN:
+		if below == true || status.MyOrders[status.CurrentFloor][DIR_DOWN] == true {
+			return DIR_DOWN
+		}
+	default:
+	}
+	if above == true {
+		return DIR_UP
+	} else if below == true {
+		return DIR_DOWN
+	} else if status.MyOrders[status.CurrentFloor][DIR_UP] == true {
+		return DIR_UP
+	} else if status.MyOrders[status.CurrentFloor][DIR_DOWN] == true {
+		return DIR_DOWN
+	} else {
+		return DIR_NODIR
+	}
 }
 
 func checkOrdersAbove(currentFloor int) bool {
