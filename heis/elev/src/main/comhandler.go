@@ -4,7 +4,7 @@ import (
 	"elevdriver"
 	. "typedef"
 	//"log"
-	"dummynetworkinterface"
+	"elevnetworkinterface"
 	//"time"
 )
 
@@ -20,11 +20,12 @@ func main() {
 
 	go elevdriver.Drive(quitChan, allocateOrdersChan, executedOrdersChan, elevStatusChan, setLightsChan, initChan)
 	go elevdriver.ButtonInterface(quitChan, extLightsChan, setLightsChan, buttonPressesChan, allocateOrdersChan, initChan)
-	go dummynetworkinterface.DummyNetworkinterface(quitChan, allocateOrdersChan, executedOrdersChan, extLightsChan, setLightsChan, buttonPressesChan, elevStatusChan)
+	elevnetworkinterface.Init(quitChan, allocateOrdersChan, executedOrdersChan, extLightsChan, setLightsChan, buttonPressesChan, elevStatusChan)
 
 	for {
-		if false {
+		if false { //Find some condition for this
 			close(quitChan)
+			return
 		}
 	}
 }
