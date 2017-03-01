@@ -65,7 +65,7 @@ func driveInit(initChan chan bool) {
 	ElevMotorDirection(DIR_NODIR)
 	status.Direction = DIR_NODIR
 	status.Running = false
-	status.MyOrders = [N_FLOORS][3]bool{{false}}
+	status.MyOrders = [N_FLOORS][N_BUTTONS]bool{{false}}
 }
 
 func getOrders(allocateOrdersChan chan OrderType) {
@@ -168,7 +168,7 @@ func determineDirection() int {
 
 func checkOrdersAbove(currentFloor int) bool {
 	for floor := currentFloor + 1; floor < N_FLOORS; floor++ {
-		for dir := 0; dir < 3; dir++ {
+		for dir := 0; dir < N_BUTTONS; dir++ {
 			if status.MyOrders[floor][dir] == true {
 				return true
 			}
@@ -179,7 +179,7 @@ func checkOrdersAbove(currentFloor int) bool {
 
 func checkOrdersBelow(currentFloor int) bool {
 	for floor := 0; floor < currentFloor; floor++ {
-		for dir := 0; dir < 3; dir++ {
+		for dir := 0; dir < N_BUTTONS; dir++ {
 			if status.MyOrders[floor][dir] == true {
 				return true
 			}
