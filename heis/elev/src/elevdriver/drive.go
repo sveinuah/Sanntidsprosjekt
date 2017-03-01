@@ -76,6 +76,53 @@ func getOrders(allocateOrdersChan chan OrderType) {
 	}
 }
 
+func stopRoutine(executedOrdersChan chan OrderType, setLightsChan chan OrderType, allocateOrdersChan chan OrderType) {
+	ElevMotorDirection(DIR_NODIR)
+	status.Running = false
+	ElevDoorOpenLight(true)
+	status.DoorOpen = true
+	status.Direction = determineDirection()
+	fmt.Println(status.Direction)
+	clearOrder(executedOrdersChan, setLightsChan)
+
+	doorTimer := time.NewTimer(DOOR_OPEN_TIME)
+	//dirSet := false
+	for status.DoorOpen == true {
+		select {
+		case <-doorTimer.C:
+			doorTimer.Stop()
+			ElevDoorOpenLight(false)
+			status.DoorOpen = false
+			time.Sleep(100 * time.Millisecond)
+		default:
+			getOrders(allocateOrdersChan)
+			if checkIfStop() {
+				clearOrder(executedOrdersChan, setLightsChan)
+				doorTimer.Reset(DOOR_OPEN_TIME)
+			}
+		}
+	}
+
+}
+
+func checkIfStop() bool {
+	var relevantDirs []int
+	switch status.Direction { //Only clear orders if not continuing in this direction
+	case DIR_UP:
+		relevantDirs = []int{DIR_UP, DIR_NODIR}
+	case DIR_DOWN:
+		relevantDirs = []int{DIR_DOWN, DIR_NODIR}
+	case DIR_NODIR:
+		relevantDirs = []int{DIR_NODIR} //DIR_UP, DIR_DOWN,
+	}
+	for dir := 0; dir < len(relevantDirs); dir++ {
+		if status.MyOrders[status.CurrentFloor][relevantDirs[dir]] == true {
+			return true
+		}
+	}
+	return false
+}
+
 func run(dir int) {
 	switch dir {
 	case DIR_NODIR:
@@ -105,63 +152,18 @@ func determineDirection() int {
 			return DIR_DOWN
 		}
 	default:
-		if above == true {
-			return DIR_UP
-		} else if below == true {
-			return DIR_DOWN
-		} else if status.MyOrders[status.CurrentFloor][DIR_UP] == true {
-			return DIR_UP
-		} else if status.MyOrders[status.CurrentFloor][DIR_DOWN] == true {
-			return DIR_DOWN
-		}
 	}
-	return DIR_NODIR
-}
-
-func checkIfStop() bool {
-	var relevantDirs []int
-	switch status.Direction { //Only clear orders if not continuing in this direction
-	case DIR_UP:
-		relevantDirs = []int{DIR_UP, DIR_NODIR}
-	case DIR_DOWN:
-		relevantDirs = []int{DIR_DOWN, DIR_NODIR}
-	case DIR_NODIR:
-		relevantDirs = []int{DIR_UP, DIR_DOWN, DIR_NODIR}
+	if above == true {
+		return DIR_UP
+	} else if below == true {
+		return DIR_DOWN
+	} else if status.MyOrders[status.CurrentFloor][DIR_UP] == true {
+		return DIR_UP
+	} else if status.MyOrders[status.CurrentFloor][DIR_DOWN] == true {
+		return DIR_DOWN
+	} else {
+		return DIR_NODIR
 	}
-	for dir := 0; dir < len(relevantDirs); dir++ {
-		if status.MyOrders[status.CurrentFloor][relevantDirs[dir]] == true {
-			return true
-		}
-	}
-	return false
-}
-
-func stopRoutine(executedOrdersChan chan OrderType, setLightsChan chan OrderType, allocateOrdersChan chan OrderType) {
-	ElevMotorDirection(DIR_NODIR)
-	status.Running = false
-	ElevDoorOpenLight(true)
-	status.DoorOpen = true
-	status.Direction = determineDirection()
-	clearOrder(executedOrdersChan, setLightsChan)
-
-	doorTimer := time.NewTimer(DOOR_OPEN_TIME)
-	//dirSet := false
-	for status.DoorOpen == true {
-		select {
-		case <-doorTimer.C:
-			doorTimer.Stop()
-			ElevDoorOpenLight(false)
-			status.DoorOpen = false
-			time.Sleep(100 * time.Millisecond)
-		default:
-			getOrders(allocateOrdersChan)
-			if checkIfStop() {
-				clearOrder(executedOrdersChan, setLightsChan)
-				doorTimer.Reset(DOOR_OPEN_TIME)
-			}
-		}
-	}
-
 }
 
 func checkOrdersAbove(currentFloor int) bool {
@@ -194,8 +196,6 @@ func clearOrder(executedOrdersChan chan OrderType, setLightsChan chan OrderType)
 
 	setLightsChan <- clearOrder
 	status.MyOrders[status.CurrentFloor][status.Direction] = false //Clear status.MyOrders from list
-
-	fmt.Println("Cleared:", clearOrder.Dir)
 
 	//If external order: Report to master and clear internal order aswell
 	if status.Direction != DIR_NODIR {
