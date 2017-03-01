@@ -21,7 +21,7 @@ var RxPort = 20014
 var TxPort = 30014
 var peersComPort = 40014
 
-func MasterInit(unitUpdateChan chan UnitUpdate, newOrderChan chan OrderType, receivedOrdersChan chan OrderType, masterBackupChan chan [][]masterOrder, statusChan chan StatusType, quitChan chan bool) {
+func MasterInit(unitUpdateChan chan UnitUpdate, newOrderChan chan OrderType, receivedOrdersChan chan OrderType, masterBackupChan chan [][]masterOrder, statusChan chan StatusType, lightsChan chan [][]bool, quitChan chan bool) {
 
 	statusRxChan := make(chan StatusType)
 	statusReqChan := make(chan int)
@@ -35,9 +35,11 @@ func MasterInit(unitUpdateChan chan UnitUpdate, newOrderChan chan OrderType, rec
 	newOrderTxChan := make(chan OrderType)
 	newOrderAckRxChan := make(chan bool)
 
+	lightsTxChan := make(chan [][]bool)
+
 	go peers.Transmitter(peersComPort, Name+":"+MASTER, transmitEnable)
 	go peers.Receiver(peersComPort, peerUpdateChan)
-	go bcast.Transmitter(TxPort)
+	go bcast.Transmitter(TxPort, newOrderTxChan, lightsTxChan)
 	go bcast.Receiver(RxPort, statusRxChan)
 
 	go translatePeerUpdates(peerUpdateChan, unitUpdateChan, quitChan)
@@ -51,9 +53,10 @@ func receiveAckHandler(AckRxChan chan AckType, newOrderAckRxChan chan AckType, q
 		select {
 		case <-quitChan:
 			return
+
 		case AckRec = <-AckRxChan:
 			if AckRec.Type == "Order Received" {
-
+				newOrderAckRxChan <- true
 			}
 		}
 	}
@@ -101,6 +104,8 @@ func sendNewOrder(newOrderChan chan OrderType, newOrderTxChan chan OrderType, ne
 	for {
 		select {
 		case <-quitChan:
+			return
+
 		case newOrder = <-newOrderChan:
 
 			sending = true
@@ -132,6 +137,28 @@ func sendNewOrder(newOrderChan chan OrderType, newOrderTxChan chan OrderType, ne
 				default:
 				}
 			}
+		default:
+		}
+	}
+}
+
+func broadcastExtLights(lightsChan chan [][]bool, lightsTxChan chan [][]bool, quitChan chan bool) {
+	var lights [][]bool
+	resendTimer := time.NewTimer(2 * RESEND_TIME)
+	for {
+		select {
+		case <-quitChan:
+			return
+		case <-resendTimer.C:
+			fallthrough
+		case lights = <-lightsChan:
+			if !resendTimer.Stop() {
+				<-resendTimer.C
+			}
+			if lights {
+				lightsTxChan <- lights
+			}
+			resendTimer.Reset(2 * RESEND_TIME)
 		default:
 		}
 	}
