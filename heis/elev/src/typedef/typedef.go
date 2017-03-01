@@ -1,12 +1,17 @@
 package typedef
 
 type OrderType struct {
-	To    UnitID
-	From  UnitID
-	ID    int
+	To    unitID
+	From  unitID
 	Floor int
 	Dir   int
 	New   bool
+}
+
+type UnitUpdate struct {
+	Peers []UnitType
+	New   UnitType
+	Lost  []UnitType
 }
 
 type UnitID string
@@ -30,7 +35,7 @@ type AckType struct { //Jeg vil at du skal ha denne i nettwork Interface --Schwu
 	To   UnitID
 	From UnitID
 	Type string
-	ID   int
+	ID   string
 }
 
 type ElevError struct {
@@ -45,6 +50,8 @@ const (
 	DIR_UP    int = 0
 	DIR_DOWN  int = 1
 	DIR_NODIR int = 2
+	MASTER    int = 1
+	SLAVE     int = 2
 )
 
 func CheckAbortFlag(abortChan chan bool) bool {
