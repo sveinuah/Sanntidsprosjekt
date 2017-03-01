@@ -1,9 +1,8 @@
 package typedef
 
 type OrderType struct {
-
-	To    unitID
-	From  unitID
+	To    UnitID
+	From  UnitID
 	ID    int
 	Floor int
 	Dir   int
@@ -39,8 +38,8 @@ type ElevError struct {
 	errStr  string
 }
 
-func (e ElevError) Error() string {return e.errStr}
-func (e ElevError) ErrorCode() int {return e.errCode}
+func (e ElevError) Error() string  { return e.errStr }
+func (e ElevError) ErrorCode() int { return e.errCode }
 
 const (
 	DIR_UP    int = 0
