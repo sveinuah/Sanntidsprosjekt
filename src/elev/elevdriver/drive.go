@@ -83,7 +83,6 @@ func stopRoutine(executedOrdersChan chan OrderType, setLightsChan chan OrderType
 	ElevDoorOpenLight(true)
 	status.DoorOpen = true
 	status.Direction = determineDirection()
-	fmt.Println(status.Direction)
 	clearOrder(executedOrdersChan, setLightsChan)
 
 	doorTimer := time.NewTimer(DOOR_OPEN_TIME)

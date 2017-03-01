@@ -1,6 +1,7 @@
 package elevnetworkinterface
 
 import (
+	"fmt"
 	"networkmodule/bcast"
 	"networkmodule/peers"
 	"time"
@@ -12,19 +13,21 @@ import (
 //Variables
 
 var Name UnitID
-var messageTimedOut = 0
+
+const messageTimedOut = 0
 
 const RESEND_TIME = 500 * time.Millisecond
 const TIMOUT_TIME = 5000 * time.Millisecond
-const TIMEOUTMESSAGES = 1
+const INDEPENDENT = true //If independent the elevator will handle its own external orders when disconnected.
 
-var TxPort = 20014
-var RxPort = 30014
-var peersComPort = 40014
+const TxPort = 20014
+const RxPort = 30014
+const peersComPort = 40014
 
-var TIMEOUT = false
+var CONNECTED = true
 
 func Init(quitChan chan bool, allocateOrdersChan chan OrderType, executedOrdersChan chan OrderType, extLightsChan chan [][]bool, setLightsChan chan OrderType, buttonPressesChan chan OrderType, elevStatusChan chan StatusType) {
+	fmt.Println("elevnet Init!")
 	/*
 		- absorb Status messages
 		- pick up executed orders, if timeout, bounce back to BI
@@ -55,7 +58,6 @@ func Init(quitChan chan bool, allocateOrdersChan chan OrderType, executedOrdersC
 	go bcast.Transmitter(TxPort, statusTxChan, ordersTxChan, ackTxChan)
 	go bcast.Receiver(RxPort, statusReqRxChan, extLightsRxChan, newOrdersRxChan, ackRxChan)
 
-	go timeoutHandle(quitChan)
 	go receiveAck(ackRxChan, statusReqRxChan, statusAckRxChan, buttonAckRxChan, executedOrdersAckRxChan, quitChan)
 	go answerStatusCall(statusTxChan, statusReqRxChan, elevStatusChan, statusAckRxChan, quitChan)
 	go transmitButtonPress(buttonPressesChan, ordersTxChan, buttonAckRxChan, allocateOrdersChan, setLightsChan, quitChan)
@@ -64,17 +66,28 @@ func Init(quitChan chan bool, allocateOrdersChan chan OrderType, executedOrdersC
 	go receiveExtLights(extLightsRxChan, extLightsChan, quitChan)
 }
 
-func timeoutHandle(quitChan chan bool) {
-	for {
-		select {
-		case <-quitChan:
-		default:
-			if messageTimedOut >= TIMEOUTMESSAGES {
-				TIMEOUT = true
-				messageTimedOut = 0
-			}
-		}
+func disConnect() {
+	fmt.Println("Disconnected")
+	CONNECTED = false
+}
+
+func reConnect() {
+	fmt.Println("Connected")
+	CONNECTED = true
+}
+
+func resetTimers(timeoutTimer *time.Timer, resendTimer *time.Timer) {
+	if !timeoutTimer.Stop() {
+		<-timeoutTimer.C
+		fmt.Println("Reset Timeout")
 	}
+	timeoutTimer.Reset(TIMOUT_TIME)
+
+	if !resendTimer.Stop() {
+		<-resendTimer.C
+		fmt.Println("Reset Resend")
+	}
+	resendTimer.Reset(RESEND_TIME)
 }
 
 func receiveAck(AckRxChan chan AckType, statusReqRxChan chan int, statusAckRxChan chan int, buttonAckRxChan chan bool, executedOrdersAckRxChan chan bool, quitChan chan bool) {
@@ -86,7 +99,7 @@ func receiveAck(AckRxChan chan AckType, statusReqRxChan chan int, statusAckRxCha
 		case AckRec = <-AckRxChan:
 			if AckRec.Type == "Status" && AckRec.ID > 0 {
 				statusReqRxChan <- AckRec.ID
-				TIMEOUT = false
+				reConnect()
 			}
 			if AckRec.To == Name {
 
@@ -142,7 +155,7 @@ func answerStatusCall(statusTxChan chan StatusType, statusReqRxChan chan int, el
 				select {
 
 				case <-timeoutTimer.C:
-					messageTimedOut++
+					disConnect()
 					timeoutTimer.Stop()
 					resendTimer.Stop()
 					sending = false
@@ -170,7 +183,6 @@ func transmitButtonPress(buttonPressChan chan OrderType, buttonPressTxChan chan 
 	var sending bool
 
 	for {
-
 		select {
 
 		case <-quitChan:
@@ -179,9 +191,11 @@ func transmitButtonPress(buttonPressChan chan OrderType, buttonPressTxChan chan 
 
 			sending = true
 
-			if TIMEOUT {
-				allocateOrdersChan <- buttonPress
-				setLightsChan <- buttonPress
+			if !CONNECTED {
+				if INDEPENDENT {
+					allocateOrdersChan <- buttonPress
+					setLightsChan <- buttonPress
+				}
 				sending = false
 				break
 			}
@@ -193,14 +207,19 @@ func transmitButtonPress(buttonPressChan chan OrderType, buttonPressTxChan chan 
 			timeoutTimer := time.NewTimer(TIMOUT_TIME)
 			resendTimer := time.NewTimer(RESEND_TIME)
 
+			resetTimers(timeoutTimer, resendTimer)
+
 			for sending {
 
 				select {
 
 				case <-timeoutTimer.C:
-					allocateOrdersChan <- buttonPress
-					setLightsChan <- buttonPress
-					messageTimedOut++
+					if INDEPENDENT {
+						allocateOrdersChan <- buttonPress
+						setLightsChan <- buttonPress
+					}
+
+					disConnect()
 					timeoutTimer.Stop()
 					resendTimer.Stop()
 					sending = false
@@ -237,6 +256,11 @@ func transmitExecOrders(executedOrdersChan chan OrderType, executedOrdersTxChan 
 
 			sending = true
 
+			if !CONNECTED {
+				sending = false
+				break
+			}
+
 			// Move current button press into transmit channe
 			executedOrdersTxChan <- executedOrder
 
@@ -244,12 +268,13 @@ func transmitExecOrders(executedOrdersChan chan OrderType, executedOrdersTxChan 
 			timeoutTimer := time.NewTimer(TIMOUT_TIME)
 			resendTimer := time.NewTimer(RESEND_TIME)
 
+			resetTimers(timeoutTimer, resendTimer)
+
 			for sending {
 
 				select {
 
 				case <-timeoutTimer.C:
-					messageTimedOut++
 					timeoutTimer.Stop()
 					resendTimer.Stop()
 					sending = false
