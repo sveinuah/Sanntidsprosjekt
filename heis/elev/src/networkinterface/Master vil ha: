@@ -1,0 +1,14 @@
+Master vil ha:
+
+Nye ordre, og fullførte ordre
+Statusrapporter
+ID til heiser og mastere
+Master synkroniseringsdata, hvis ikke aktiv. 
+
+unitID og OrderID kanskje?
+
+init:
+return LocalID string
+return NumFloors int  //antar alle heiser har like mange floors.
+Broadcast alive
+
