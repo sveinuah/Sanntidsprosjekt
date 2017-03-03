@@ -17,6 +17,11 @@ const (
 	STATE_GO_PASSIVE int = 2
 	STATE_PASSIVE    int = 3
 	STATE_QUIT       int = 4
+
+	COST_STOP		int = 2
+	COST_FLOOR_CHANGE int = 2
+	COST_DIR_CHANGE int = 6
+	ESTIMATE_BUFFER int = 2
 )
 
 var id UnitID
@@ -239,12 +244,153 @@ func handleNewOrder(o masterOrder) {
 }
 
 func findAppropriate(o masterOrder) {
+	/*
+	cost := 10000 //high number
+	chosenUnit := id
+	*/
 	for i, unit := range units.Peers {
 		//For testing purposes--------------------------
 		if unit.Type == TYPE_SLAVE {
 			return unit.ID, time.Now().Add(10*time.Second)
 		}
 		//----------------------------------------------
+		/* ACTUAL ALGORITHM
+		if unit.Type == TYPE_SLAVE {
+			tempCost := 0
+			floorChanges := 0
+			stops := 0
+			dirChanges := 0
+			report := elevReports[unit.ID]
+
+			if report.Running && report.Floor == o.Floor {
+				if report.Dir == DIR_UP {
+					if report.Floor < numFloors {
+						report.Floor++
+					}
+				}
+				if report.Floor > 0 {
+					report.Floor--
+				}
+			}
+
+			if o.Floor > report.Floor && report.Dir == DIR_DOWN {
+				dirChanges = 1
+				if o.Dir == DIR_DOWN {
+					dirChanges++
+				}
+
+				lowestFloor := report.Floor
+				for i:= report.Floor; i > 0; i-- {
+					switch {
+						case report.MyOrders[i][DIR_DOWN] == true:
+							fallthrough
+						case report.Myorders[i][DIR_NODIR] == true:
+							stops++
+							lowestFloor = i
+					}
+				}
+
+				for i := lowestFloor; i < o.Floor; i++ {
+					switch {
+						case report.MyOrders[i][DIR_UP] == true:
+							fallthrough
+						case report.MyOrders[i][DIR_NODIR] == true:
+							stops++
+					}
+				}
+
+				floorChanges = (report.Floor - lowerFloor) + (o.Floor - lowestFloor)
+
+			} else if o.Floor > report.Floor && report.Dir == DIR_UP {
+				if o.Dir == DIR_DOWN {
+					dirChanges = 1
+				}
+
+				for i := report.Floor; i < o.Floor; i++ {
+					switch {
+						case report.MyOrders[i][DIR_UP] == true:
+							fallthrough
+						case report.MyOrders[i][DIR_NODIR] == true:
+							stops++
+					}
+				}
+
+				floorChanges = o.Floor - report.Floor	
+
+			} else if o.Floor < report.Floor && report.Dir == DIR_DOWN {
+				if o.Dir == DIR_UP {
+					dirChanges = 1
+				}
+
+				for i := o.Floor; i < report.Floor; i++ {
+					switch {
+						case report.MyOrders[i][DIR_DOWN] == true:
+							fallthrough
+						case report.MyOrders[i][DIR_NODIR] == true:
+							stops++
+					}
+				}
+
+				floorChanges = report.Floor - o.Floor
+				
+			} else if o.Floor < report.Floor && report.Dir == DIR_UP {
+				dirChanges = 1
+				if o.Dir == DIR_UP {
+					dirChanges++
+				}
+
+				highestFloor := report.Floor
+				for i:= report.Floor; i < numFloors + 1; i++ {
+					switch {
+						case report.MyOrders[i][DIR_UP] == true:
+							fallthrough
+						case report.Myorders[i][DIR_NODIR] == true:
+							stops++
+							highestFloor = i
+					}
+				}
+
+				for i := highestFloor; i > o.Floor; i-- {
+					switch {
+						case report.MyOrders[i][DIR_DOWN] == true:
+							fallthrough
+						case report.MyOrders[i][DIR_NODIR] == true:
+							stops++
+					}
+				}
+
+				floorChanges = (highestFloor - report.Floor) + (highestFloor - o.Floor)
+	
+			} else {
+				if o.Floor > report.Floor {
+					floorChanges = o.Floor - report.Floor
+
+					if o.Dir == DIR_DOWN {
+						dirChanges = 1
+					}
+				} else {
+					floorChanges = report.Floor - o.Floor
+
+					if o.Dir == DIR_UP {
+						dirChanges = 1
+					}
+				}
+			}
+			tempCost += COST_FLOOR_CHANGE * floorChanges
+			tempCost += COST_STOP * stops
+			tempCost += COST_DIR_CHANGE * dirChanges
+
+			if tempCost < cost {
+				chosenUnit = unit.ID
+				cost = tempCost
+			}
+		}
+
+
+
+
+		*/
 	}
 	return id, time.Time{} //bounce back to myself
+	//return chosenUnit, time.Now().Add((cost+ESTIMATE_BUFFER) * time.Second) //This should be returned
 }
