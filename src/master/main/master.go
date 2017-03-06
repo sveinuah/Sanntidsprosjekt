@@ -151,8 +151,8 @@ func orders(reports *map[UnitID]StatusType, quit chan bool) {
 	}
 }
 
-func init(syncChan chan [][]masterOrder) int {
-	id, numFloors = networkinterface.masterInit()
+func init(sync chan [][]masterOrder) int {
+	id, numFloors = networkinterface.Init()
 	orderList = [numFloors][2]masterOrder{}
 
 	timeOut := time.After(INITIALIATION_WAIT_TIME * time.Second)

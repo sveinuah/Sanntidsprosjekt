@@ -21,7 +21,7 @@ var RxPort = 20014
 var TxPort = 30014
 var peersComPort = 40014
 
-func MasterInit(unitUpdateChan chan UnitUpdate, newOrderChan chan OrderType, receivedOrdersChan chan OrderType, masterBackupChan chan [][]masterOrder, statusChan chan StatusType, lightsChan chan [][]bool, quitChan chan bool) {
+func Init(unitUpdateChan chan UnitUpdate, newOrderChan chan OrderType, receivedOrdersChan chan OrderType, masterBackupChan chan [][]masterOrder, statusChan chan StatusType, lightsChan chan [][]bool, quitChan chan bool) {
 
 	statusRxChan := make(chan StatusType)
 	statusReqChan := make(chan int)
@@ -45,6 +45,14 @@ func MasterInit(unitUpdateChan chan UnitUpdate, newOrderChan chan OrderType, rec
 	go translatePeerUpdates(peerUpdateChan, unitUpdateChan, quitChan)
 	go receiveAckHandler(AckRxChan, newOrderAckRxChan, quitChan)
 
+}
+
+func Active(unitUpdateChan chan UnitUpdate, orderTx chan OrderType, orderRx chan OrderType, masterBackupChan chan [][]masterorder, statusChan chan StatusType, lightsChan chan [][]bool, quitChan chan bool) {
+	// initiate active routine
+}
+
+func Passive(masterBackupChan chan [][]masterOrder, quit chan bool) {
+	// initiate passive routine
 }
 
 func receiveAckHandler(AckRxChan chan AckType, newOrderAckRxChan chan AckType, quitChan chan bool) {
