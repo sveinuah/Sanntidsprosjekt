@@ -29,7 +29,7 @@ func Init(ID UnitID, masterBackupChan chan [][]masterOrder, unitUpdateChan chan 
 	statusReqChan := make(chan int)
 	peerUpdateChan := make(chan peers.PeerUpdate)
 
-	go peers.Transmitter(peersComPort, quitChan, Name+":"+MASTER)
+	go peers.Transmitter(peersComPort, quitChan, string(Name)+":"+MASTER)
 	go peers.Receiver(peersComPort, quitChan, peerUpdateChan)
 	go bcast.Transmitter(TxPort, quitChan, statusReqChan, AckTxChan)
 	go bcast.Receiver(RxPort, quitChan, statusRxChan, masterBackupChan, AckRxChan)
@@ -69,7 +69,7 @@ func Active(unitUpdateChan chan UnitUpdate, orderTx chan OrderType, orderRx chan
 
 	lightsTxChan := make(chan [][]bool)
 
-	go peers.Transmitter(peersComPort, Name+":"+MASTER, quitChan)
+	go peers.Transmitter(peersComPort, string(Name)+":"+MASTER, quitChan)
 	go peers.Receiver(peersComPort, peerUpdateChan, quitChan)
 
 	go bcast.Transmitter(TxPort, quitChan, newOrderTxChan, masterBackupChan, lightsChan)
@@ -91,7 +91,7 @@ func Passive(masterBackupChan chan [][]masterOrder, unitUpdateChan chan UnitUpda
 	go bcast.Receiver(RxPort, quitChan, quitChan, masterBackupChan)
 
 	// Call and poll network for units
-	go peers.Transmitter(peersComPort, quitChan, Name+":"+MASTER)
+	go peers.Transmitter(peersComPort, quitChan, string(Name)+":"+MASTER)
 	go peers.Receiver(peersComPort, quitChan, peerUpdateChan)
 	go translatePeerUpdates(peerUpdateChan, unitUpdateChan, quitChan)
 }
