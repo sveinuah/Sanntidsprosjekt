@@ -65,14 +65,11 @@ func (e ElevError) Error() string { return e.errStr }
 func (e ElevError) ErrorCode() int { return e.errCode }
 
 const (
-	// DirUp defines up direction
-	DirUp int = 0
-	// DirDown defines up direction
-	DirDown int = 1
-	// DirNodir defines up direction
-	DirNodir int = 2
-	// MasterType defines the master type
-	MasterType string = "1"
-	// SlaveType defines the slave type
-	SlaveType string = "2"
+	DIR_UP      int    = 0
+	DIR_DOWN    int    = 1
+	DIR_NODIR   int    = 2
+	MASTER      string = "1"
+	SLAVE       string = "2"
+	TYPE_MASTER int    = 1
+	TYPE_SLAVE  int    = 2
 )

@@ -53,10 +53,9 @@ func Init(quitChan chan bool, allocateOrdersChan chan OrderType, executedOrdersC
 	ackTxChan := make(chan AckType)
 	transmitEnable := make(chan bool)
 
-	go peers.Transmitter(peersComPort, string(Name)+":"+SLAVE, transmitEnable)
-
-	go bcast.Transmitter(TxPort, statusTxChan, ordersTxChan, ackTxChan)
-	go bcast.Receiver(RxPort, statusReqRxChan, extLightsRxChan, newOrdersRxChan, ackRxChan)
+	go peers.Transmitter(peersComPort, string(Name)+":"+SLAVE)
+	go bcast.Transmitter(TxPort, quitChan, statusTxChan, ordersTxChan, ackTxChan)
+	go bcast.Receiver(RxPort, quitChan, statusReqRxChan, extLightsRxChan, newOrdersRxChan, ackRxChan)
 
 	go receiveAck(ackRxChan, statusReqRxChan, statusAckRxChan, buttonAckRxChan, executedOrdersAckRxChan, quitChan)
 	go answerStatusCall(statusTxChan, statusReqRxChan, elevStatusChan, statusAckRxChan, quitChan)
@@ -200,6 +199,8 @@ func transmitButtonPress(buttonPressChan chan OrderType, buttonPressTxChan chan 
 				break
 			}
 
+			buttonPress.From = Name
+
 			// Move current button press into transmit channe
 			buttonPressTxChan <- buttonPress
 
@@ -260,6 +261,8 @@ func transmitExecOrders(executedOrdersChan chan OrderType, executedOrdersTxChan 
 				sending = false
 				break
 			}
+
+			executedOrder.From = Name
 
 			// Move current button press into transmit channe
 			executedOrdersTxChan <- executedOrder
