@@ -47,11 +47,11 @@ func (e ElevError) Error() string  { return e.errStr }
 func (e ElevError) ErrorCode() int { return e.errCode }
 
 const (
-	DIR_UP    int    = 0
-	DIR_DOWN  int    = 1
-	DIR_NODIR int    = 2
-	MASTER    string = "1"
-	SLAVE     string = "2"
-	TYPE_MASTER int  = 1
-	TYPE_SLAVE int   = 2
+	DIR_UP      int    = 0
+	DIR_DOWN    int    = 1
+	DIR_NODIR   int    = 2
+	MASTER      string = "1"
+	SLAVE       string = "2"
+	TYPE_MASTER int    = 1
+	TYPE_SLAVE  int    = 2
 )

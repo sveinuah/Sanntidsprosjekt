@@ -21,10 +21,41 @@ var RxPort = 20014
 var TxPort = 30014
 var peersComPort = 40014
 
-func Init(unitUpdateChan chan UnitUpdate, newOrderChan chan OrderType, receivedOrdersChan chan OrderType, masterBackupChan chan [][]masterOrder, statusChan chan StatusType, lightsChan chan [][]bool, quitChan chan bool) {
+func Init(ID UnitID, masterBackupChan chan [][]masterOrder, unitUpdateChan chan UnitUpdate, quitChan chan bool) int {
 
+	Name = ID
+
+	statusChan := make(chan StatusType)
 	statusRxChan := make(chan StatusType)
 	statusReqChan := make(chan int)
+	peerUpdateChan := make(chan peers.PeerUpdate)
+
+	go peers.Transmitter(peersComPort, quitChan, Name+":"+MASTER)
+	go peers.Receiver(peersComPort, quitChan, peerUpdateChan)
+	go bcast.Transmitter(TxPort, quitChan, statusReqChan, AckTxChan)
+	go bcast.Receiver(RxPort, quitChan, statusRxChan, masterBackupChan, AckRxChan)
+	go translatePeerUpdates(peerUpdateChan, unitUpdateChan, quitChan)
+	go requestAndReceiveStatus(statusChan, statusRxChan, statusReqChan, AckTxChan, quitChan)
+
+	statusReqChan <- 1
+
+	for {
+		select {
+		case <-quitChan:
+			return nil
+		case <-time.After(RESEND_TIME):
+			statusReqChan <- 1
+		case status := <-statusChan:
+			return len(status.MyOrder)
+		default:
+		}
+	}
+}
+
+func Active(unitUpdateChan chan UnitUpdate, orderTx chan OrderType, orderRx chan OrderType, masterBackupChan chan [][]masterorder, statusChan chan StatusType, statusReqChan chan bool, lightsChan chan [][]bool, quitChan chan bool) {
+
+	statusRxChan := make(chan StatusType)
+	statusReqChan
 
 	AckTxChan := make(chan AckType)
 	AckRxChan := make(chan AckType)
@@ -35,27 +66,38 @@ func Init(unitUpdateChan chan UnitUpdate, newOrderChan chan OrderType, receivedO
 	newOrderTxChan := make(chan OrderType)
 	newOrderAckRxChan := make(chan bool)
 
+	extOrderRxChan := make(chan OrderType)
+
 	lightsTxChan := make(chan [][]bool)
 
-	go peers.Transmitter(peersComPort, Name+":"+MASTER, transmitEnable)
-	go peers.Receiver(peersComPort, peerUpdateChan)
-	go bcast.Transmitter(TxPort, newOrderTxChan, lightsTxChan)
-	go bcast.Receiver(RxPort, statusRxChan)
+	go peers.Transmitter(peersComPort, Name+":"+MASTER, quitChan)
+	go peers.Receiver(peersComPort, peerUpdateChan, quitChan)
 
+	go bcast.Transmitter(TxPort, quitChan, newOrderTxChan, masterBackupChan, lightsChan)
+	go bcast.Receiver(RxPort, quitChan, statusRxChan, extOrderRxChan, AckRxChan)
+
+	go requestAndReceiveStatus(statusChan, statusRxChan, statusReqChan, AckTxChan, quitChan)
+	go sendNewOrder(orderTx, newOrderTxChan, newOrderAckRxChan, quitChan)
+	go receiveOrder(extOrderRxChan, orderRx, AckTxChan, quitChan)
 	go translatePeerUpdates(peerUpdateChan, unitUpdateChan, quitChan)
 	go receiveAckHandler(AckRxChan, newOrderAckRxChan, quitChan)
-
 }
 
-func Active(unitUpdateChan chan UnitUpdate, orderTx chan OrderType, orderRx chan OrderType, masterBackupChan chan [][]masterorder, statusChan chan StatusType, lightsChan chan [][]bool, quitChan chan bool) {
-	// initiate active routine
+func Passive(masterBackupChan chan [][]masterOrder, unitUpdateChan chan UnitUpdate, quitChan chan bool) {
+
+	transmitEnableChan := make(chan bool)
+	peerUpdateChan := make(chan peers.PeerUpdate)
+
+	//Receive Backup
+	go bcast.Receiver(RxPort, quitChan, quitChan, masterBackupChan)
+
+	// Call and poll network for units
+	go peers.Transmitter(peersComPort, quitChan, Name+":"+MASTER)
+	go peers.Receiver(peersComPort, quitChan, peerUpdateChan)
+	go translatePeerUpdates(peerUpdateChan, unitUpdateChan, quitChan)
 }
 
-func Passive(masterBackupChan chan [][]masterOrder, quit chan bool) {
-	// initiate passive routine
-}
-
-func receiveAckHandler(AckRxChan chan AckType, newOrderAckRxChan chan AckType, quitChan chan bool) {
+func receiveAckHandler(AckRxChan chan AckType, newOrderAckRxChan chan bool, quitChan chan bool) {
 	var AckRec AckType
 	for {
 		select {
@@ -145,6 +187,34 @@ func sendNewOrder(newOrderChan chan OrderType, newOrderTxChan chan OrderType, ne
 				default:
 				}
 			}
+		default:
+		}
+	}
+}
+
+func receiveOrder(extOrderRxChan chan OrderType, orderRx chan OrderType, AckTxChan chan AckType, quitChan chan bool) {
+	var extOrder OrderType
+	var AckRec AckType
+	for {
+		select {
+		case <-quitChan:
+			return
+		case extOrder = <-extOrderRxChan:
+			if extOrder.To != "" {
+				break
+			}
+
+			if extOrder.New == 1 {
+
+				AckRec.Type = "ButtonPress"
+			} else if extOrder.New == 0 {
+				AckRec.Type = "ExecOrder"
+			}
+
+			AckRec.To = extOrder.From
+			AckTxChan <- AckRec
+
+			orderRx <- extOrder
 		default:
 		}
 	}
