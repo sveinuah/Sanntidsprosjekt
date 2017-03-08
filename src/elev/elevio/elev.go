@@ -1,6 +1,7 @@
 package elevio
 
 import (
+	"fmt"
 	"log"
 	. "typedef"
 )
@@ -18,6 +19,7 @@ var buttonLightMatrix [N_FLOORS][N_BUTTONS]int
 var buttonMatrix [N_FLOORS][N_BUTTONS]int
 
 func ElevInit() int {
+	fmt.Println("Elev Initializing..")
 	buttonLightMatrix = [N_FLOORS][N_BUTTONS]int{
 		{LIGHT_UP1, LIGHT_DOWN1, LIGHT_COMMAND1},
 		{LIGHT_UP2, LIGHT_DOWN2, LIGHT_COMMAND2},

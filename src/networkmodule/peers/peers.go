@@ -22,7 +22,6 @@ func Transmitter(port int, id string, quitChan chan bool) {
 	conn := conn.DialBroadcastUDP(port)
 	addr, _ := net.ResolveUDPAddr("udp4", fmt.Sprintf("255.255.255.255:%d", port))
 
-	enable := true
 	for {
 		select {
 		case <-quitChan:
@@ -79,7 +78,7 @@ func Receiver(port int, peerUpdateCh chan<- PeerUpdate, quitChan chan bool) {
 			if updated {
 				p.Peers = make([]string, 0, len(lastSeen))
 
-				for k, _ := range lastSeen {
+				for k := range lastSeen {
 					p.Peers = append(p.Peers, k)
 				}
 

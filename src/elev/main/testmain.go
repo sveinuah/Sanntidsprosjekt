@@ -2,19 +2,16 @@ package main
 
 //For debugging
 import (
-	. "elevio"
+	. "elev/elevio"
 	"fmt"
-	"time"
 	//. "typedef"
 )
 
 func main() {
 	ElevInit()
-	testvar := 1
+	ElevMotorDirection(0)
 	for {
-		ElevMotorDirection(testvar)
-		time.Sleep(2 * time.Second)
-		fmt.Println(testvar)
+		fmt.Println(ElevGetFloorSensorSignal())
 	}
 }
 

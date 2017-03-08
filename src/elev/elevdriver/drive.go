@@ -10,8 +10,8 @@ import (
 var status StatusType
 
 const (
-	BETWEEN_FLOORS = -1
-	DOOR_OPEN_TIME = 2 * time.Second
+	BETWEEN_FLOORS int = -1
+	DOOR_OPEN_TIME     = 2 * time.Second
 )
 
 func Drive(quitChan chan bool, allocateOrdersChan chan OrderType, executedOrdersChan chan OrderType, elevStatusChan chan StatusType, setLightsChan chan OrderType, initChan chan bool) {
@@ -58,14 +58,18 @@ func driveInit(initChan chan bool) {
 	initChan <- true
 	ElevMotorDirection(DIR_UP)
 	for ElevGetFloorSensorSignal() == BETWEEN_FLOORS {
-
 	}
 	status.CurrentFloor = ElevGetFloorSensorSignal()
+	fmt.Println("Freedom!")
+	fmt.Println(status.CurrentFloor)
 	ElevFloorIndicator(status.CurrentFloor)
 	ElevMotorDirection(DIR_NODIR)
 	status.Direction = DIR_NODIR
 	status.Running = false
-	status.MyOrders = [N_FLOORS][N_BUTTONS]bool{{false}}
+	status.MyOrders = make([][]bool, N_FLOORS, N_FLOORS)
+	for i := range status.MyOrders {
+		status.MyOrders[i] = make([]bool, N_BUTTONS, N_BUTTONS)
+	}
 }
 
 func getOrders(allocateOrdersChan chan OrderType) {

@@ -5,6 +5,7 @@ import (
 	. "typedef"
 	//"log"
 	"elev/elevnetworkinterface"
+	"fmt"
 	//"time"
 )
 
@@ -20,14 +21,10 @@ func main() {
 
 	go elevdriver.Drive(quitChan, allocateOrdersChan, executedOrdersChan, elevStatusChan, setLightsChan, initChan)
 	go elevdriver.ButtonInterface(quitChan, extLightsChan, setLightsChan, buttonPressesChan, allocateOrdersChan, initChan)
-	elevnetworkinterface.Init(quitChan, allocateOrdersChan, executedOrdersChan, extLightsChan, setLightsChan, buttonPressesChan, elevStatusChan)
+	elevnetworkinterface.Start(quitChan, allocateOrdersChan, executedOrdersChan, extLightsChan, setLightsChan, buttonPressesChan, elevStatusChan)
 
-	for {
-		if false { //Find some condition for this
-			close(quitChan)
-			return
-		}
-	}
+	fmt.Println("Evig comhandler")
+
 }
 
 //Fix buffers

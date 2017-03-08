@@ -71,5 +71,5 @@ func ButtonInterface(quitChan chan bool, extLightsChan chan [][]bool, setLightsC
 func buttonInterfaceInit(initChan chan int) {
 	<-initChan
 	//wait for drive to run elevInit, return N_FLOORS
-	lights = [N_FLOORS][3]bool{{false}}
+	lights = [N_FLOORS][N_BUTTONS]bool{{false}}
 }

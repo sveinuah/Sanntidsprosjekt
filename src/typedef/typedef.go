@@ -4,8 +4,8 @@ import "time"
 
 // OrderType haha test lol.
 type OrderType struct {
-	To    UnitID
-	From  UnitID
+	To    string
+	From  string
 	Floor int
 	Dir   int
 	New   bool
@@ -13,9 +13,9 @@ type OrderType struct {
 
 // MasterOrder skal.
 type MasterOrder struct {
-	o         OrderType
-	delegated time.Time
-	estimated time.Time
+	Order     OrderType
+	Delegated time.Time
+	Estimated time.Time
 }
 
 // UnitUpdate skal.
@@ -25,12 +25,9 @@ type UnitUpdate struct {
 	Lost  []UnitType
 }
 
-// UnitID wow!
-type UnitID string
-
 // StatusType o.O
 type StatusType struct {
-	From         UnitID
+	From         string
 	ID           int
 	CurrentFloor int
 	Direction    int
@@ -41,14 +38,14 @@ type StatusType struct {
 
 // UnitType shiiiet!
 type UnitType struct {
-	Type int
-	ID   UnitID
+	Type string
+	ID   string
 }
 
 // AckType .You say AckType?
 type AckType struct { //Jeg vil at du skal ha denne i nettwork Interface --Schwung
-	To   UnitID
-	From UnitID
+	To   string
+	From string
 	Type string
 	ID   int
 }
