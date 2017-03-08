@@ -1,27 +1,29 @@
 package masterNetworkInterface
 
 import (
-	"../networkmodule/bcast"
-	"../networkmodule/peers"
-	. "../typedef"
-	"fmt"
+	"networkmodule/bcast"
+	"networkmodule/peers"
 	"strings"
 	"time"
+	. "typedef"
 )
 
 //abortChan, allocateOrdersChan, executedOrdersChan, extLightsChan, extReportChan, elevStatusChan
 
 //Variables
-var Name UnitID
-var RESEND_TIME = 10 * time.Millisecond
-var TIMOUT_TIME = 95 * time.Millisecond
+var name UnitID
+var resendTime = 10 * time.Millisecond
+var timeOutTime = 95 * time.Millisecond
 var messageTimedOut = 0
 
-var RxPort = 20014
-var TxPort = 30014
+var rxPort = 20014
+var txPort = 30014
 var peersComPort = 40014
 
-func Init(unitUpdateChan chan UnitUpdate, newOrderChan chan OrderType, receivedOrdersChan chan OrderType, masterBackupChan chan [][]masterOrder, statusChan chan StatusType, lightsChan chan [][]bool, quitChan chan bool) {
+// Init initializes the go routines needed during the initialization of the master.
+func Init(unitUpdateChan chan UnitUpdate, newOrderChan chan OrderType, receivedOrdersChan chan OrderType, masterBackupChan chan [][]MasterOrder, statusChan chan StatusType, lightsChan chan [][]bool, quitChan chan bool) {
+
+	numFloors := nil //skaffe numFloors
 
 	statusRxChan := make(chan StatusType)
 	statusReqChan := make(chan int)
@@ -39,19 +41,21 @@ func Init(unitUpdateChan chan UnitUpdate, newOrderChan chan OrderType, receivedO
 
 	go peers.Transmitter(peersComPort, Name+":"+MASTER, transmitEnable)
 	go peers.Receiver(peersComPort, peerUpdateChan)
-	go bcast.Transmitter(TxPort, newOrderTxChan, lightsTxChan)
-	go bcast.Receiver(RxPort, statusRxChan)
+	go bcast.Transmitter(txPort, newOrderTxChan, lightsTxChan)
+	go bcast.Receiver(rxPort, statusRxChan)
 
 	go translatePeerUpdates(peerUpdateChan, unitUpdateChan, quitChan)
 	go receiveAckHandler(AckRxChan, newOrderAckRxChan, quitChan)
-
+	return numFloors
 }
 
-func Active(unitUpdateChan chan UnitUpdate, orderTx chan OrderType, orderRx chan OrderType, masterBackupChan chan [][]masterorder, statusChan chan StatusType, lightsChan chan [][]bool, quitChan chan bool) {
+// Active starts the go-routines needed for an active master
+func Active(unitUpdateChan chan UnitUpdate, orderTx chan OrderType, orderRx chan OrderType, masterBackupChan chan [][]MasterOrder, statusChan chan StatusType, lightsChan chan [][]bool, quitChan chan bool) {
 	// initiate active routine
 }
 
-func Passive(masterBackupChan chan [][]masterOrder, quit chan bool) {
+// Passive starts the go-routines needed for a passive master.
+func Passive(masterBackupChan chan [][]MasterOrder, quit chan bool) {
 	// initiate passive routine
 }
 
@@ -122,8 +126,8 @@ func sendNewOrder(newOrderChan chan OrderType, newOrderTxChan chan OrderType, ne
 			newOrderTxChan <- newOrder
 
 			// While we wait for acknowledge from Master:
-			timeoutTimer := time.NewTimer(TIMOUT_TIME)
-			resendTimer := time.NewTimer(RESEND_TIME)
+			timeoutTimer := time.NewTimer(timeOutTime)
+			resendTimer := time.NewTimer(resendTime)
 
 			for sending {
 
@@ -140,7 +144,7 @@ func sendNewOrder(newOrderChan chan OrderType, newOrderTxChan chan OrderType, ne
 
 				case <-resendTimer.C:
 					newOrderTxChan <- newOrder
-					resendTimer.Reset(RESEND_TIME)
+					resendTimer.Reset(resendTime)
 
 				default:
 				}
@@ -152,7 +156,7 @@ func sendNewOrder(newOrderChan chan OrderType, newOrderTxChan chan OrderType, ne
 
 func broadcastExtLights(lightsChan chan [][]bool, lightsTxChan chan [][]bool, quitChan chan bool) {
 	var lights [][]bool
-	resendTimer := time.NewTimer(2 * RESEND_TIME)
+	resendTimer := time.NewTimer(2 * resendTime)
 	for {
 		select {
 		case <-quitChan:
@@ -166,7 +170,7 @@ func broadcastExtLights(lightsChan chan [][]bool, lightsTxChan chan [][]bool, qu
 			if lights {
 				lightsTxChan <- lights
 			}
-			resendTimer.Reset(2 * RESEND_TIME)
+			resendTimer.Reset(2 * resendTime)
 		default:
 		}
 	}

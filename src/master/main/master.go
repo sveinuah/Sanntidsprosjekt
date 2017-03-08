@@ -1,73 +1,74 @@
 package main
 
 import (
-	"../orderqueue"
-	"../typedef"
-	"log"
+	"flag"
+	"fmt"
+	"master/masternetworkinterface"
 	"time"
+	"typedef"
 )
 
 const (
-	MASTER_SYNC_INTERVALL   int = 100 // in milliseconds
-	INITIALIATION_WAIT_TIME int = 3   // in seconds
-	REPORT_INTERVALL        int = 2   //in seconds
+	masterSyncInterval = 100 // in milliseconds
+	initWaitTime       = 3   // in seconds
+	reportInterval     = 2   //in seconds
 
-	STATE_GO_ACTIVE  int = 0
-	STATE_ACTIVE     int = 1
-	STATE_GO_PASSIVE int = 2
-	STATE_PASSIVE    int = 3
-	STATE_QUIT       int = 4
+	stateGoActive  int = 0
+	stateActive    int = 1
+	stateGoPassive int = 2
+	statePassive   int = 3
+	stateQuit      int = 4
 
-	COST_STOP		int = 2
-	COST_FLOOR_CHANGE int = 2
-	COST_DIR_CHANGE int = 6
-	ESTIMATE_BUFFER int = 2
+	stopCost        int = 2
+	floorChangeCost int = 2
+	dirChangeCost   int = 6
+	estimateBuffer  int = 2
 )
 
-var id UnitID
+var id typedef.UnitID
 var numFloors int
-var units networkmodule.UnitUpdate
-var orderList [][]masterOrder //numFloors+2directions
-
-type masterOrder struct {
-	o OrderType
-	delegated time.Time
-	estimated time.Time
-}
+var units typedef.UnitUpdate
+var orderList [][]typedef.MasterOrder //numFloors+2directions
 
 func main() {
 
-	syncChan := make(chan [][]masterOrder)
+	syncChan := make(chan [][]typedef.MasterOrder)
 	quit := make(chan bool)
 
-	syncTimer := time.Tick(MASTER_SYNC_INTERVALL * time.Millisecond)
+	syncTimer := time.Tick(masterSyncInterval * time.Millisecond)
 
-	lastState := init(syncChan)
-	state := lastState
+	init()
+
+	lastState := -1
+	var state int
 
 	for {
 		state = getState(lastState)
 		switch state {
-		case STATE_GO_PASSIVE:
+		case stateGoPassive:
 			close(quit)
+			quit := make(chan bool)
+			go passive(syncChan, quit)
 			fmt.Println("Going passive")
 			fallthrough
-		case STATE_PASSIVE:
+		case statePassive:
 			select {
 			case orderList = <-syncChan:
 			default:
 			}
-		case STATE_GO_ACTIVE:
+		case stateGoActive:
+			close(quit)
 			quit := make(chan bool)
-			go active(quit)
+			go active(sync, quit)
+			fmt.Println("Going Active")
 			fallthrough
-		case STATE_ACTIVE:
+		case stateActive:
 			select {
 			case <-syncTimer:
 				syncChan <- orderList
 			default:
 			}
-		case STATE_QUIT:
+		case stateQuit:
 			fmt.Println("Quitting")
 			close(quit)
 			return
@@ -76,29 +77,45 @@ func main() {
 	}
 }
 
-func active(quit chan bool) { // not finished
-	reportNum := 1
+func passive(sync chan [][]typedef.MasterOrder, quit chan bool) {
+	unitChan := make(chan typedef.UnitUpdate)
 
-	elevReports := make(map[UnitID]StatusType)
-
-	statusReqChan := make(chan int) //to request reports with id
-	statusChan := make(chan StatusType)
-	unitChan := make(chan networkinterface.UnitUpdate)
-
-	//initialize network for active NYI
-
-	go orders(elevReports, quit)
-
-	reportTime := time.Tick(REPORT_INTERVALL * time.Second)
+	networkinterface.Passive(sync, unitChan, quit)
 
 	for {
 		select {
-		case  units := <-unitChan:
-			// addUnit(unit) antagelig unødvendig ved bruk av peers
+		case units = <-unitChan:
+		case <-quit:
+			fmt.Println("Aborting passive go-goutine")
+			return
+		}
+	}
+}
+
+func active(sync chan [][]typedef.MasterOrder, quit chan bool) {
+	reportNum := 1
+
+	elevReports := make(map[typedef.UnitID]typedef.StatusType)
+
+	statusReqChan := make(chan int) //to request reports with id
+	statusChan := make(chan typedef.StatusType)
+	unitChan := make(chan typedef.UnitUpdate)
+	orderRx := make(chan typedef.OrderType)
+	orderTx := make(chan typedef.OrderType)
+	lightChan := make(chan [][]bool)
+
+	networkinterface.Active(unitChan, orderTx, orderRx, sync, statusChan, statusReqChan, lightChan, quit)
+
+	go orders(elevReports, orderRx, orderTx, lightChan, quit)
+
+	reportTime := time.Tick(reportInterval * time.Second)
+
+	for {
+		select {
+		case units := <-unitChan:
 		case report <- statusChan:
 			elevReports[report.From] = report
 		case <-reportTime:
-			// handleDeadUnits(elevReports, reportNum) unødvendig ved bruk av peers
 			reportNum++
 			statusReqChan <- reportNum
 		case err <- errChan:
@@ -111,27 +128,21 @@ func active(quit chan bool) { // not finished
 	}
 }
 
-func orders(reports *map[UnitID]StatusType, quit chan bool) {
-	var externalLights [numFloors][3] bool = {}
-
-	orderRx := make(chan OrderType)
-	orderTx := make(chan OrderType)
-	lightChan := make(chan [][]bool)
-
-	//initialize network for orders 
+func orders(reports *map[typedef.UnitID]typedef.StatusType, orderRx chan typedef.OrderType, orderTx chan typedef.OrderType, lightChan chan [][]bool, quit chan bool) {
+	var externalLights [numFloors][3]bool
 
 	for {
 		select {
 		case order := <-orderRx:
-			orderCapsule := masterOrder{order}
-			handleNewOrder(orderCapsule)
-			lightChan <- lights
+			orderCapsule := typedef.MasterOrder{order}
+			handleNewOrder(orderCapsule, externalLights)
+			lightChan <- externalLights
 		case <-quit:
 			fmt.Println("go orders aborting")
 			return
 		default:
-			for i := range(orderList) {
-				for j, order := range(orderList[i]) {
+			for i := range orderList {
+				for j, order := range orderList[i] {
 					diff := time.Now().Sub(order.Estimated)
 
 					if order.To == nil || diff > 0 {
@@ -141,52 +152,61 @@ func orders(reports *map[UnitID]StatusType, quit chan bool) {
 						orderLIst[i][j].Delegated = time.Now()
 						orderList[i][j].Estimated = estim
 
-						txOrder := OrderType{orderList[i][j].o}
+						txOrder := typedef.OrderType{orderList[i][j].o}
 						orderTx <- txOrder
 					}
 				}
 			}
-			
 		}
 	}
 }
 
-func init(sync chan [][]masterOrder) int {
-	id, numFloors = networkinterface.Init()
-	orderList = [numFloors][2]masterOrder{}
+func init() int {
+	flag.StringVar(&id, "id", "", "id of this peer")
+	flag.Parse()
 
-	timeOut := time.After(INITIALIATION_WAIT_TIME * time.Second)
+	fmt.PrintLn("Initializing!")
+
+	quit := make(chan bool)
+	syncChan := make(chan [][]typedef.masterOrder)
+	unitChan := make(chan typedef.UnitUpdate)
+
+	numFloors = networkinterface.Init(id, syncChan, unitChan, quit)
+
+	orderList = make([numFloors][3]typedef.masterOrder)
+
+	timeOut := time.After(initWaitTime * time.Second)
 
 	done := false
 	for done != true {
 		select {
-		case orderList = <-sync:
+		case orderList = <-syncChan:
+		case units = <-unitChan:
 		case <-timeOut:
 			done = true
 		}
 	}
 
+	close(quit)
+	fmt.Println("Done Initializing!")
+
 	if ckeckIfActive() {
-		go active(orderChan, unitChan, elevStatusChan, masterSync, quit)
-		return STATE_ACTIVE
-	} else {
-		return STATE_PASSIVE
+		return stateGoActive
 	}
+	return stateGoPassive
 }
 
 func getState(lastState int) int {
-	// get and return STATE_QUIT when quit flag is raised NYI
+	// get and return stateQuit when quit flag is raised NYI
 	if checkIfActive() {
-		if lastState == STATE_ACTIVE {
-			return STATE_ACTIVE
+		if lastState == stateActive {
+			return stateActive
 		}
-		return STATE_GO_ACTIVE
-	} else {
-		if lastState == STATE_PASSIVE {
-			return STATE_PASSIVE
-		}
-		return STATE_GO_PASSIVE
+		return stateGoActive
+	} else if lastState == statePassive {
+		return statePassive
 	}
+	return stateGoPassive
 }
 
 func checkIfActive() bool {
@@ -200,37 +220,7 @@ func checkIfActive() bool {
 	return true
 }
 
-/*
-func addUnit(unit UnitType) {
-	newUnit := true
-	for _, u = range unitList {
-		if u.ID == unit.ID {
-			newUnit = false
-			break
-		}
-	}
-	if newUnit {
-		unitList = append(unitList, unit)
-	}
-}
-
-func handleDeadUnits(list map[UnitID]StatusType, num int) {
-	deadUnits := make([]UnitID, 0, len(unitList))
-	for id, report := range list {
-		if report.ID != num {
-			deadUnits = append(deadUnits, id)
-		}
-	}
-	for i, unit := range unitList {
-		for _, id := range deadUnits {
-			if unit.ID == id {
-				unitList = append(unitList[:i], unitList[i+1:]...)
-			}
-		}
-	}
-}*/
-
-func handleNewOrder(o masterOrder) {
+func handleNewOrder(o typedef.MasterOrder, lights *[][]bool) {
 	if o.New {
 		if orderList[o.Floor][o.Dir] == nil {
 			orderList[o.Floor][o.Dir] = o
@@ -238,20 +228,19 @@ func handleNewOrder(o masterOrder) {
 		}
 		return
 	}
-	if o.To == 
-	orderList[o.Floor][o.Dir] = masterOrder{} //clear order
+	orderList[o.Floor][o.Dir] = typedef.MasterOrder{} //clear order
 	lights[o.Floor][o.Dir] = false
 }
 
-func findAppropriate(o masterOrder) {
+func findAppropriate(o typedef.MasterOrder) {
 	/*
-	cost := 10000 //high number
-	chosenUnit := id
+		cost := 10000 //high number
+		chosenUnit := id
 	*/
 	for i, unit := range units.Peers {
 		//For testing purposes--------------------------
 		if unit.Type == TYPE_SLAVE {
-			return unit.ID, time.Now().Add(10*time.Second)
+			return unit.ID, time.Now().Add(10 * time.Second)
 		}
 		//----------------------------------------------
 		/* ACTUAL ALGORITHM
@@ -315,7 +304,7 @@ func findAppropriate(o masterOrder) {
 					}
 				}
 
-				floorChanges = o.Floor - report.Floor	
+				floorChanges = o.Floor - report.Floor
 
 			} else if o.Floor < report.Floor && report.Dir == DIR_DOWN {
 				if o.Dir == DIR_UP {
@@ -332,7 +321,7 @@ func findAppropriate(o masterOrder) {
 				}
 
 				floorChanges = report.Floor - o.Floor
-				
+
 			} else if o.Floor < report.Floor && report.Dir == DIR_UP {
 				dirChanges = 1
 				if o.Dir == DIR_UP {
@@ -360,7 +349,7 @@ func findAppropriate(o masterOrder) {
 				}
 
 				floorChanges = (highestFloor - report.Floor) + (highestFloor - o.Floor)
-	
+
 			} else {
 				if o.Floor > report.Floor {
 					floorChanges = o.Floor - report.Floor
@@ -376,9 +365,9 @@ func findAppropriate(o masterOrder) {
 					}
 				}
 			}
-			tempCost += COST_FLOOR_CHANGE * floorChanges
-			tempCost += COST_STOP * stops
-			tempCost += COST_DIR_CHANGE * dirChanges
+			tempCost += floorChangeCost * floorChanges
+			tempCost += stopCost * stops
+			tempCost += dirChangeCost * dirChanges
 
 			if tempCost < cost {
 				chosenUnit = unit.ID
@@ -392,5 +381,5 @@ func findAppropriate(o masterOrder) {
 		*/
 	}
 	return id, time.Time{} //bounce back to myself
-	//return chosenUnit, time.Now().Add((cost+ESTIMATE_BUFFER) * time.Second) //This should be returned
+	//return chosenUnit, time.Now().Add((cost+estimateBuffer) * time.Second) //This should be returned
 }

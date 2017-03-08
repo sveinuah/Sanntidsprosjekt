@@ -9,8 +9,8 @@ import (
 
 const DIR_INTERNAL = 2
 
-var lights [4][3]bool
-var buttonSent [4][3]bool
+var lights [N_FLOORS][N_BUTTONS]bool
+var buttonSent [N_FLOORS][N_BUTTONS]bool
 
 func ButtonInterface(quitChan chan bool, extLightsChan chan [][]bool, setLightsChan chan OrderType, buttonPressesChan chan OrderType, allocateOrdersChan chan OrderType, initChan chan bool) {
 	for {
