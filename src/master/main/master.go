@@ -91,10 +91,8 @@ func initialize() {
 
 	numFloorsChan := make(chan int)
 
-	go masternetworkinterface.Init(id, syncChan, unitChan, numFloorsChan, quitChan)
+	numFloors = masternetworkinterface.Init(id, syncChan, unitChan, numFloorsChan, quitChan)
 
-	fmt.Println("Getting num Floors")
-	numFloors := <-numFloorsChan
 	fmt.Print("Got ", numFloors, " Floors")
 
 	orderList = make([][]typedef.MasterOrder, numFloors, numFloors)
@@ -115,11 +113,12 @@ func initialize() {
 	}
 
 	close(quitChan)
+	time.Sleep(100*time.Millisecond)
 	fmt.Println("Done Initializing Master!")
 }
 
 func passive(sync chan [][]typedef.MasterOrder, quitChan chan bool) {
-	unitChan := make(chan typedef.UnitUpdate)
+	unitChan := make(chan typedef.UnitUpdate, 1)
 
 	masternetworkinterface.Passive(sync, unitChan, quitChan)
 
@@ -138,12 +137,12 @@ func active(sync chan [][]typedef.MasterOrder, quitChan chan bool) {
 
 	elevReports := make(map[string]typedef.StatusType)
 
-	statusReqChan := make(chan int) //to request reports with id
-	statusChan := make(chan typedef.StatusType)
-	unitChan := make(chan typedef.UnitUpdate)
-	orderRx := make(chan typedef.OrderType)
-	orderTx := make(chan typedef.OrderType)
-	lightChan := make(chan [][]bool)
+	statusReqChan := make(chan int, 1) //to request reports with id
+	statusChan := make(chan typedef.StatusType, 10)
+	unitChan := make(chan typedef.UnitUpdate, 1)
+	orderRx := make(chan typedef.OrderType, 100)
+	orderTx := make(chan typedef.OrderType, 100)
+	lightChan := make(chan [][]bool, 1)
 
 	masternetworkinterface.Active(unitChan, orderTx, orderRx, sync, statusChan, statusReqChan, lightChan, quitChan)
 

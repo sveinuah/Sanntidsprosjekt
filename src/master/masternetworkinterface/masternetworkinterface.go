@@ -68,7 +68,7 @@ func Init(ID string, masterBackupChan chan [][]MasterOrder, unitUpdateChan chan 
 			fmt.Println("Sending Status Req")
 			statusReqChan <- 1
 		case status := <-statusChan:
-			numFloorsChan <- len(status.MyOrders)
+			return len(status.MyOrders)
 		default:
 		}
 	}
@@ -101,8 +101,6 @@ func Active(unitUpdateChan chan UnitUpdate, orderTx chan OrderType, orderRx chan
 	go receiveOrder(extOrderRxChan, orderRx, ackTxChan, quitChan)
 	go translatePeerUpdates(peerUpdateChan, unitUpdateChan, quitChan)
 	go receiveAckHandler(ackRxChan, newOrderackRxChan, quitChan)
-
-	<-quitChan
 }
 
 func Passive(masterBackupChan chan [][]MasterOrder, unitUpdateChan chan UnitUpdate, quitChan chan bool) {
@@ -116,8 +114,6 @@ func Passive(masterBackupChan chan [][]MasterOrder, unitUpdateChan chan UnitUpda
 	go peers.Transmitter(peersComPort, string(name)+":"+MASTER, quitChan)
 	go peers.Receiver(peersComPort, peerUpdateChan, quitChan)
 	go translatePeerUpdates(peerUpdateChan, unitUpdateChan, quitChan)
-
-	<-quitChan
 }
 
 func receiveAckHandler(ackRxChan chan AckType, newOrderackRxChan chan bool, quitChan chan bool) {
