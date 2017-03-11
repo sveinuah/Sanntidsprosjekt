@@ -3,7 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"master/masternetworkinterface"
+//	"master/masternetworkinterface"
+	"master/testmaster"
 	"time"
 	"typedef"
 )
@@ -58,6 +59,7 @@ func main() {
 			case orderList = <-syncChan:
 			default:
 			}
+			lastState = statePassive
 		case stateGoActive:
 			close(quitChan)
 			quitChan := make(chan bool)
@@ -70,6 +72,7 @@ func main() {
 				syncChan <- orderList
 			default:
 			}
+			lastState = stateActive
 		case stateQuit:
 			fmt.Println("Quitting")
 			close(quitChan)
@@ -82,6 +85,8 @@ func main() {
 func initialize() {
 	flag.StringVar(&id, "id", "", "id of this peer")
 	flag.Parse()
+	
+	fmt.Println(id)
 
 	fmt.Println("Master Initializing!")
 
@@ -89,9 +94,7 @@ func initialize() {
 	syncChan := make(chan [][]typedef.MasterOrder)
 	unitChan := make(chan typedef.UnitUpdate)
 
-	numFloorsChan := make(chan int)
-
-	numFloors = masternetworkinterface.Init(id, syncChan, unitChan, numFloorsChan, quitChan)
+	numFloors = test.Init(id, syncChan, unitChan, quitChan)//masternetworkinterface.Init(id, syncChan, unitChan, quitChan)
 
 	fmt.Print("Got ", numFloors, " Floors")
 
@@ -112,7 +115,7 @@ func initialize() {
 		}
 	}
 
-	close(quitChan)
+	//close(quitChan)
 	time.Sleep(100*time.Millisecond)
 	fmt.Println("Done Initializing Master!")
 }
@@ -120,7 +123,7 @@ func initialize() {
 func passive(sync chan [][]typedef.MasterOrder, quitChan chan bool) {
 	unitChan := make(chan typedef.UnitUpdate, 1)
 
-	masternetworkinterface.Passive(sync, unitChan, quitChan)
+	test.Passive(sync, unitChan, quitChan)//masternetworkinterface.Passive(sync, unitChan, quitChan)
 
 	for {
 		select {
@@ -144,7 +147,7 @@ func active(sync chan [][]typedef.MasterOrder, quitChan chan bool) {
 	orderTx := make(chan typedef.OrderType, 100)
 	lightChan := make(chan [][]bool, 1)
 
-	masternetworkinterface.Active(unitChan, orderTx, orderRx, sync, statusChan, statusReqChan, lightChan, quitChan)
+	test.Active(unitChan, orderTx, orderRx, sync, statusChan, statusReqChan, lightChan, quitChan)//masternetworkinterface.Active(unitChan, orderTx, orderRx, sync, statusChan, statusReqChan, lightChan, quitChan)
 
 	go orders(elevReports, orderRx, orderTx, lightChan, quitChan)
 
@@ -153,9 +156,12 @@ func active(sync chan [][]typedef.MasterOrder, quitChan chan bool) {
 	for {
 		select {
 		case units = <-unitChan:
+			fmt.Println("Got Units", units)
 		case report := <-statusChan:
+			fmt.Println("Got report", report)
 			elevReports[report.From] = report
 		case <-reportTime:
+			fmt.Println("Request report!")
 			reportNum++
 			statusReqChan <- reportNum
 		//case <-errChan:
