@@ -24,7 +24,7 @@ const (
 	peersComPort = 40014
 )
 
-func Testfunction() {
+/*func Testfunction() {
 	quitChan := make(chan bool)
 	dataChan := make(chan [4][2]bool)
 	go bcast.Transmitter(txPort, quitChan, dataChan)
@@ -36,7 +36,7 @@ func Testfunction() {
 		dataChan <- order
 		time.Sleep(4 * time.Second)
 	}
-}
+}*/
 
 func Init(ID string, masterBackupChan chan [][]MasterOrder, unitUpdateChan chan UnitUpdate, numFloorsChan chan int, quitChan chan bool) {
 
@@ -56,13 +56,13 @@ func Init(ID string, masterBackupChan chan [][]MasterOrder, unitUpdateChan chan 
 
 	go peers.Transmitter(peersComPort, name+":"+MASTER, quitChan)
 	go peers.Receiver(peersComPort, peerUpdateChan, quitChan)
-	go bcast.Transmitter(txPort, quitChan, statusReqChan, ackTxChan)
+	go bcast.Transmitter(txPort, quitChan, ackTxChan)
 	go bcast.Receiver(rxPort, quitChan, statusRxChan, masterBackupChan, ackRxChan)
 
 	go translatePeerUpdates(peerUpdateChan, unitUpdateChan, quitChan)
 	go requestAndReceiveStatus(statusChan, statusRxChan, statusReqChan, ackTxChan, quitChan)
 	fmt.Println("All goroutines are go!")
-	statusReqChan <- statusAckTx
+	ackTxChan <- statusAckTx
 
 	for {
 		select {
@@ -70,9 +70,9 @@ func Init(ID string, masterBackupChan chan [][]MasterOrder, unitUpdateChan chan 
 			return
 		case <-time.After(resendTime):
 			fmt.Println("Sending Status Req")
-			statusReqChan <- statusAckTx
+			ackTxChan <- statusAckTx
 		case status := <-statusChan:
-			numFloorsChan <- len(status.MyOrders)
+			return len(status.MyOrders)
 		default:
 		}
 	}
@@ -119,8 +119,6 @@ func Passive(masterBackupChan chan [][]MasterOrder, unitUpdateChan chan UnitUpda
 	go peers.Transmitter(peersComPort, string(name)+":"+MASTER, quitChan)
 	go peers.Receiver(peersComPort, peerUpdateChan, quitChan)
 	go translatePeerUpdates(peerUpdateChan, unitUpdateChan, quitChan)
-
-	<-quitChan
 }
 
 func receiveAckHandler(ackRxChan chan AckType, newOrderackRxChan chan bool, quitChan chan bool) {

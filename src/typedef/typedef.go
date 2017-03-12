@@ -14,7 +14,6 @@ type OrderType struct {
 // MasterOrder skal.
 type MasterOrder struct {
 	Order     OrderType
-	Delegated time.Time
 	Estimated time.Time
 }
 
