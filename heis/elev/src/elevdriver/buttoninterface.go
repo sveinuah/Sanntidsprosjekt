@@ -8,7 +8,7 @@ import (
 var lights [][]bool
 
 func ButtonInterface(abortChan chan bool, extLightsChan chan [][]bool, setLightsChan chan OrderType, buttonPressesChan chan OrderType, allocateOrdersChan chan OrderType, initChan chan int) {
-	numFloors = buttonInterfaceInit(initChan)
+	numFloors := buttonInterfaceInit(initChan)
 
 	abortFlag := false
 	for abortFlag != true {
@@ -56,13 +56,9 @@ func ButtonInterface(abortChan chan bool, extLightsChan chan [][]bool, setLights
 	}
 }
 
-func buttonInterfaceInit(initChan chan int) int {
+func buttonInterfaceInit(initChan chan int) {
 	numFloors := <-initChan
 	//wait for drive to run elevInit, return numFloors
-	for floor := 0; floor < numFloors; floor++ {
-		for dir := 0; dir < 3; dir++ {
-			lights[floor][dir] = false
-		}
-	}
+	lights = [N_FLOORS][3]bool{{false}}
 	return numFloors
 }

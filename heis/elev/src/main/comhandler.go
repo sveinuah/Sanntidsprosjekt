@@ -4,13 +4,9 @@ import (
 	"elevdriver"
 	. "typedef"
 	//"log"
-	//"networkinterface"
+	"dummynetworkinterface"
 	"time"
 )
-
-func makeReport() {
-
-}
 
 func main() {
 	allocateOrdersChan := make(chan OrderType, 100) //NetworkInterface/ButtonInterface -> Drive: Deliver orders for Drive to execute
@@ -27,7 +23,7 @@ func main() {
 	//Pass all as pointers?
 	go elevdriver.Drive(abortChan, allocateOrdersChan, executedOrdersChan, elevStatusChan, setLightsChan, initChan)
 	go elevdriver.ButtonInterface(abortChan, extLightsChan, setLightsChan, buttonPressesChan, allocateOrdersChan, initChan)
-	//go Networkinterface(abortChan, allocateOrdersChan, executedOrdersChan, extLightsChan, setLightsChan, elevStatusChan)
+	go dummynetworkinterface.DummyNetworkinterface(abortChan, allocateOrdersChan, executedOrdersChan, extLightsChan, setLightsChan, buttonPressesChan, elevStatusChan)
 
 	for abortFlag != true {
 		abortFlag = CheckAbortFlag(abortChan)
