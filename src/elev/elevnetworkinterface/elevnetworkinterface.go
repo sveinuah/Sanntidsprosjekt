@@ -98,7 +98,7 @@ func receiveAck(AckRxChan chan AckType, statusReqRxChan chan int, statusAckRxCha
 			fmt.Println("quitting ack")
 			return
 		case AckRec = <-AckRxChan:
-			if AckRec.Type == "Status" && AckRec.ID > 0 {
+			if AckRec.Type == "Status" && AckRec.To == "" {
 				statusReqRxChan <- AckRec.ID
 				reConnect()
 			}

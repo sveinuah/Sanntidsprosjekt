@@ -1,9 +1,9 @@
 package main
 
-import(
+import (
 	"fmt"
-	"time"
 	"master/testMNI"
+	"time"
 	. "typedef"
 )
 
@@ -15,7 +15,7 @@ func main() {
 	statusChan := make(chan StatusType, 10)
 	quit := make(chan bool)
 
-	testMNI.Init(statusReqChan, statusChan, quit)
+	testMNI.Init_tmni(statusReqChan, statusChan, quit)
 
 	for {
 		time.Sleep(1 * time.Second)
@@ -23,11 +23,11 @@ func main() {
 		statusReqChan <- reportNum
 		time.Sleep(300 * time.Millisecond)
 		for len(statusChan) > 0 {
-			fmt.Println("Got report:", <- statusChan)
+			fmt.Println("Got report:", <-statusChan)
 		}
-		if reportNum > 14 {
+		if reportNum > 142 {
 			close(quit)
-			time.Sleep(1* time.Second)
+			time.Sleep(1 * time.Second)
 			return
 		}
 	}
