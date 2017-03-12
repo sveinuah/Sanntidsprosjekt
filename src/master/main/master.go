@@ -239,7 +239,6 @@ func orders(reports map[string]typedef.StatusType, reportAccess chan bool, order
 						if to != id {
 							orderList[i][j].Order.To = to
 							orderList[i][j].Order.From = id
-							orderList[i][j].Delegated = time.Now()
 							orderList[i][j].Estimated = estim
 							orderTx <- orderList[i][j].Order
 						}

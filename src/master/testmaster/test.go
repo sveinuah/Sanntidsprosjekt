@@ -148,7 +148,6 @@ func createOrders(wait chan<- bool, orderRx chan<- typedef.OrderType, orderTx <-
 			order := typedef.OrderType{"Carl", "Bob", 3, typedef.DIR_DOWN, true}
 			fmt.Println("Made Order!", order)
 			orderRx <- order
-			time.Sleep(50*time.Millisecond)
 		case order = <- orderTx:
 			fmt.Println("Sent order:", order)
 			t.Reset(100*time.Millisecond)
@@ -160,18 +159,6 @@ func createOrders(wait chan<- bool, orderRx chan<- typedef.OrderType, orderTx <-
 			orderRx <- order
 		case <- quit:
 			fmt.Println("Quitting create/handleOrders!")
-			return
-		}
-	}
-}
-
-func receiveOrders(wait <-chan bool, orderTx <-chan typedef.OrderType, orderRx chan<- typedef.OrderType, quit chan bool) {
-	for {
-		<- wait
-		select {
-		
-		case <- quit:
-			fmt.Println("Quitting receiveOrders")
 			return
 		}
 	}
