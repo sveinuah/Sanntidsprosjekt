@@ -2,7 +2,7 @@ package testMNI
 
 import (
 	"networkmodule/bcast"
-	//"networkmodule/peers"
+	"networkmodule/peers"
 	"time"
 	. "typedef"
 )
@@ -22,16 +22,18 @@ const (
 	peersComPort = 40014
 )
 
-func Init_tmni(statusReqChan chan int, statusChan chan StatusType, quitChan chan bool) {
+func Init_tmni(statusReqChan chan int, statusChan chan StatusType, unitUpdateChan chan UnitUpdate, quitChan chan bool) {
 
 	ackTxChan := make(chan AckType)
 	statusRxChan := make(chan StatusType)
+	peerUpdateChan := make(chan peers.PeerUpdate)
 
+	go peers.Receiver(peersComPort, peerUpdateChan, quitChan)
 	go bcast.Transmitter(txPort, quitChan, ackTxChan)
 	go bcast.Receiver(rxPort, quitChan, statusRxChan)
 
 	go requestAndReceiveStatus(statusChan, statusRxChan, statusReqChan, ackTxChan, quitChan)
-
+	go translatePeerUpdates(peerUpdateChan, unitUpdateChan, quitChan)
 }
 
 func requestAndReceiveStatus(statusChan chan StatusType, statusRxChan chan StatusType, statusReqChan chan int, ackTxChan chan AckType, quitChan chan bool) {
@@ -65,6 +67,39 @@ func requestAndReceiveStatus(statusChan chan StatusType, statusRxChan chan Statu
 
 			statusChan <- recStatus
 
+		default:
+		}
+	}
+}
+
+func translatePeerUpdates(peerUpdateChan chan peers.PeerUpdate, unitUpdateChan chan UnitUpdate, quitChan chan bool) {
+	var newPeerUpdate peers.PeerUpdate
+	var newUnitUpdate UnitUpdate
+	var newUnit UnitType
+	for {
+		select {
+		case <-quitChan:
+		case newPeerUpdate = <-peerUpdateChan:
+
+			for _, val := range newPeerUpdate.Peers {
+				strArr := strings.Split(val, ":")
+				newUnit.Type = strArr[1]
+				newUnit.ID = string(strArr[0])
+				newUnitUpdate.Peers = append(newUnitUpdate.Peers, newUnit)
+			}
+
+			newUnit.Type = strings.Split(newPeerUpdate.New, ":")[1]
+			newUnit.ID = strings.Split(newPeerUpdate.New, ":")[0]
+			newUnitUpdate.New = newUnit
+
+			for _, val := range newPeerUpdate.Lost {
+				strArr := strings.Split(val, ":")
+				newUnit.Type = strArr[1]
+				newUnit.ID = string(strArr[0])
+				newUnitUpdate.Lost = append(newUnitUpdate.Lost, newUnit)
+			}
+
+			unitUpdateChan <- newUnitUpdate
 		default:
 		}
 	}
