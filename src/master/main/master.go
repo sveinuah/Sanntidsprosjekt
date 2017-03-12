@@ -14,7 +14,7 @@ import (
 const (
 	masterSyncInterval = 100 // in milliseconds
 	initWaitTime       = 3   // in seconds
-	reportInterval     = 2   //in seconds
+	reportInterval     = 2   // in seconds
 
 	stateGoActive  int = 0
 	stateActive    int = 1
@@ -31,25 +31,21 @@ const (
 var id string
 var numFloors int
 var units typedef.UnitUpdate
-var orderList [][]typedef.MasterOrder //numFloors+2directions
+var orderList [][]typedef.MasterOrder
 
 var unitMutex = &sync.Mutex{}
 
+
 func main() {
-
-	//masternetworkinterface.Testfunction()
-
-	syncChan := make(chan [][]typedef.MasterOrder)
-
-	syncTimer := time.Tick(masterSyncInterval * time.Millisecond)
-
 	initialize()
-
-	quitChan := make(chan bool)
-	doneChan := make(chan bool)
 
 	var state int
 	var lastState int
+
+	syncTimer := time.Tick(masterSyncInterval * time.Millisecond)
+	syncChan := make(chan [][]typedef.MasterOrder)
+	quitChan := make(chan bool)
+	doneChan := make(chan bool)
 
 	if checkIfActive() {
 		go active(syncChan, doneChan, quitChan)
@@ -98,8 +94,10 @@ func main() {
 	}
 }
 
+// initialize uses the network interface to find other Masters/Slaves and get synchronization data.
+// terminates initiated go-routines after it is finished.
 func initialize() {
-	flag.StringVar(&id, "id", "", "id of this peer")
+	flag.StringVar(&id, "id", "", "The master ID")
 	flag.Parse()
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
@@ -141,6 +139,9 @@ func initialize() {
 	fmt.Println("Done Initializing Master!")
 }
 
+// passive updates unit list
+// It starts the passive routine in the network interface.
+// It terminates them when something is received on the quit channel.
 func passive(sync chan [][]typedef.MasterOrder, quitChan chan bool) {
 	unitChan := make(chan typedef.UnitUpdate, 1)
 	subQuit := make(chan bool)
@@ -162,6 +163,9 @@ func passive(sync chan [][]typedef.MasterOrder, quitChan chan bool) {
 	}
 }
 
+// active updates unit list, requests and handles received reports
+// It starts the active routine in the network interface, and the order handling go-routine.
+// It terminates when something is received on the quit channel.
 func active(sync chan [][]typedef.MasterOrder, done chan bool, quitChan chan bool) {
 	reportNum := 1
 
@@ -214,6 +218,9 @@ func active(sync chan [][]typedef.MasterOrder, done chan bool, quitChan chan boo
 	}
 }
 
+// orders handles all incoming orders, as well as delegating them to the slaves.
+// It is made to run as a go-routine.
+// It terminates when something is received on the quit channel.
 func orders(reports map[string]typedef.StatusType, reportAccess chan bool, orderRx chan typedef.OrderType, orderTx chan typedef.OrderType, lightChan chan [][]bool, quitChan chan bool, done chan<- bool) {
 	var externalLights = make([][]bool, numFloors, numFloors)
 	for i := range externalLights {
@@ -241,6 +248,8 @@ func orders(reports map[string]typedef.StatusType, reportAccess chan bool, order
 							orderList[i][j].Order.From = id
 							orderList[i][j].Estimated = estim
 							orderTx <- orderList[i][j].Order
+						} else {
+							orderLst[i][j].Order.To = id
 						}
 					}
 				}
@@ -262,6 +271,7 @@ func getState(lastState int) int {
 	return stateGoPassive
 }
 
+// This function reads from the global variable units
 func checkIfActive() bool {
 	unitMutex.Lock()
 	defer unitMutex.Unlock()
@@ -272,10 +282,12 @@ func checkIfActive() bool {
 			}
 		}
 	}
-
 	return true
 }
 
+// handleOrders adds all new orders sent to "", to the order list.
+// receiving a false order, means that it is executed by an elevator.
+// This function writes to the global orderList and the given Light matrix.
 func handleNewOrder(o typedef.OrderType, lights *[][]bool) {
 	if o.New {
 		if orderList[o.Floor][o.Dir].Order.To == "" {
@@ -288,6 +300,9 @@ func handleNewOrder(o typedef.OrderType, lights *[][]bool) {
 	(*lights)[o.Floor][o.Dir] = false
 }
 
+// findAppropriate provides a cost function to find which slave is best suited for the order
+// It calculates an estimate for when the order should be finished.
+// This function reads from global values.
 func findAppropriate(reports map[string]typedef.StatusType, reportAccess chan bool, o typedef.MasterOrder) (string, time.Time) {
 	cost := 10000 //high number
 	chosenUnit := id
