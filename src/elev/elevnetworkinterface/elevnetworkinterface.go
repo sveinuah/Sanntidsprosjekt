@@ -37,21 +37,21 @@ func Start(quitChan chan bool, allocateOrdersChan chan OrderType, executedOrders
 
 	name = "Jarvis"
 
-	statusTxChan := make(chan StatusType)
-	statusReqRxChan := make(chan int)
-	statusAckRxChan := make(chan int)
-	buttonAckRxChan := make(chan bool)
+	statusTxChan := make(chan StatusType, 8)
+	statusReqRxChan := make(chan int, 8)
+	statusAckRxChan := make(chan int, 8)
+	buttonAckRxChan := make(chan bool, 100)
 
-	extLightsRxChan := make(chan [][]bool)
+	extLightsRxChan := make(chan [][]bool, 100)
 
-	ordersTxChan := make(chan OrderType)
+	ordersTxChan := make(chan OrderType, 100)
 
-	executedOrdersAckRxChan := make(chan bool)
+	executedOrdersAckRxChan := make(chan bool, 10)
 
-	newOrdersRxChan := make(chan OrderType)
+	newOrdersRxChan := make(chan OrderType, 10)
 
-	ackRxChan := make(chan AckType)
-	ackTxChan := make(chan AckType)
+	ackRxChan := make(chan AckType, 8)
+	ackTxChan := make(chan AckType, 8)
 
 	go peers.Transmitter(peersComPort, name+":"+SLAVE, quitChan)
 	go bcast.Transmitter(TxPort, quitChan, statusTxChan, ordersTxChan, ackTxChan)
@@ -64,7 +64,6 @@ func Start(quitChan chan bool, allocateOrdersChan chan OrderType, executedOrders
 	go receiveNewOrder(allocateOrdersChan, newOrdersRxChan, ackTxChan, quitChan)
 	go receiveExtLights(extLightsRxChan, extLightsChan, quitChan)
 
-	<-quitChan
 }
 
 func disConnect() {
@@ -99,7 +98,7 @@ func receiveAck(AckRxChan chan AckType, statusReqRxChan chan int, statusAckRxCha
 			fmt.Println("quitting ack")
 			return
 		case AckRec = <-AckRxChan:
-			if AckRec.Type == "Status" && AckRec.ID > 0 {
+			if AckRec.Type == "Status" && AckRec.To == "" {
 				statusReqRxChan <- AckRec.ID
 				reConnect()
 			}
@@ -205,7 +204,6 @@ func transmitButtonPress(buttonPressChan chan OrderType, buttonPressTxChan chan 
 			}
 
 			buttonPress.From = name
-			fmt.Println("Setting name")
 			// Move current button press into transmit channel
 			buttonPressTxChan <- buttonPress
 			fmt.Println("First sending")

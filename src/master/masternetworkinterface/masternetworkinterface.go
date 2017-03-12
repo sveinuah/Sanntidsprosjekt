@@ -24,7 +24,7 @@ const (
 	peersComPort = 40014
 )
 
-func Testfunction() {
+/*func Testfunction() {
 	quitChan := make(chan bool)
 	dataChan := make(chan [4][2]bool)
 	go bcast.Transmitter(txPort, quitChan, dataChan)
@@ -36,7 +36,7 @@ func Testfunction() {
 		dataChan <- order
 		time.Sleep(4 * time.Second)
 	}
-}
+}*/
 
 func Init(ID string, masterBackupChan chan [][]MasterOrder, unitUpdateChan chan UnitUpdate, numFloorsChan chan int, quitChan chan bool) {
 
@@ -47,18 +47,22 @@ func Init(ID string, masterBackupChan chan [][]MasterOrder, unitUpdateChan chan 
 
 	ackTxChan := make(chan AckType)
 	ackRxChan := make(chan AckType)
-	statusReqChan := make(chan int)
+	statusReqChan := make(chan AckType)
+	var statusAckTx AckType
+	statusAckTx.Type = "Status"
+	statusAckTx.ID = 1
+
 	peerUpdateChan := make(chan peers.PeerUpdate)
 
 	go peers.Transmitter(peersComPort, name+":"+MASTER, quitChan)
 	go peers.Receiver(peersComPort, peerUpdateChan, quitChan)
-	go bcast.Transmitter(txPort, quitChan, statusReqChan, ackTxChan)
+	go bcast.Transmitter(txPort, quitChan, ackTxChan)
 	go bcast.Receiver(rxPort, quitChan, statusRxChan, masterBackupChan, ackRxChan)
 
 	go translatePeerUpdates(peerUpdateChan, unitUpdateChan, quitChan)
 	go requestAndReceiveStatus(statusChan, statusRxChan, statusReqChan, ackTxChan, quitChan)
 	fmt.Println("All goroutines are go!")
-	statusReqChan <- 1
+	ackTxChan <- statusAckTx
 
 	for {
 		select {
@@ -66,7 +70,7 @@ func Init(ID string, masterBackupChan chan [][]MasterOrder, unitUpdateChan chan 
 			return
 		case <-time.After(resendTime):
 			fmt.Println("Sending Status Req")
-			statusReqChan <- 1
+			ackTxChan <- statusAckTx
 		case status := <-statusChan:
 			return len(status.MyOrders)
 		default:
@@ -101,6 +105,7 @@ func Active(unitUpdateChan chan UnitUpdate, orderTx chan OrderType, orderRx chan
 	go receiveOrder(extOrderRxChan, orderRx, ackTxChan, quitChan)
 	go translatePeerUpdates(peerUpdateChan, unitUpdateChan, quitChan)
 	go receiveAckHandler(ackRxChan, newOrderackRxChan, quitChan)
+
 }
 
 func Passive(masterBackupChan chan [][]MasterOrder, unitUpdateChan chan UnitUpdate, quitChan chan bool) {
