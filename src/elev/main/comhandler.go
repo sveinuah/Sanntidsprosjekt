@@ -26,7 +26,7 @@ func main() {
 	elevnetworkinterface.Start(quitChan, allocateOrdersChan, executedOrdersChan, extLightsChan, setLightsChan, buttonPressesChan, elevStatusChan)
 
 	fmt.Println("Evig comhandler")
-
+	<-quitChan
 }
 
 //Fix buffers

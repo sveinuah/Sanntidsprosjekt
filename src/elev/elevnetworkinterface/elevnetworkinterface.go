@@ -67,12 +67,12 @@ func Start(quitChan chan bool, allocateOrdersChan chan OrderType, executedOrders
 }
 
 func disConnect() {
-	fmt.Println("Disconnected")
+	//fmt.Println("Disconnected")
 	CONNECTED = false
 }
 
 func reConnect() {
-	fmt.Println("Connected")
+	//fmt.Println("Connected")
 	CONNECTED = true
 }
 
@@ -101,12 +101,14 @@ func receiveAck(AckRxChan chan AckType, statusReqRxChan chan int, statusAckRxCha
 			if AckRec.Type == "Status" && AckRec.To == "" {
 				statusReqRxChan <- AckRec.ID
 				reConnect()
+				fmt.Println("Receieved Status Req")
 			}
 			if AckRec.To == name {
 
 				switch AckRec.Type {
 				case "Status":
 					statusAckRxChan <- AckRec.ID
+					fmt.Println("Acknowledge Rec Status")
 				case "ButtonPress":
 					buttonAckRxChan <- true
 				case "ExecOrder":
@@ -135,6 +137,8 @@ func answerStatusCall(statusTxChan chan StatusType, statusReqRxChan chan int, el
 			sending = true
 
 			// Get current status
+			fmt.Println("Fetching Status")
+
 			status = <-elevStatusChan
 
 			//Add name to status
@@ -144,6 +148,7 @@ func answerStatusCall(statusTxChan chan StatusType, statusReqRxChan chan int, el
 			status.ID = statusReq
 
 			// Move current status into transmit channel
+			fmt.Println("Sending Status")
 			statusTxChan <- status
 
 			// While we wait for acknowledge from Master:
