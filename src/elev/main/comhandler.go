@@ -1,7 +1,8 @@
 package main
 
 import (
-	"elev/elevdriver"
+	//"elev/elevdriver"
+	"elev/dummyheis"
 	. "typedef"
 	//"log"
 	"elev/elevnetworkinterface"
@@ -16,11 +17,12 @@ func main() {
 	setLightsChan := make(chan OrderType, 100)      //Drive -> ButtonInterface: Clear lights after executed orders
 	extLightsChan := make(chan [][]bool, 1)         //NetworkInterface -> ButtonInterface: Update external lights according to Master list
 	elevStatusChan := make(chan StatusType, 1)      //Drive -> NetworkInterface: Report elevator status to Master
-	initChan := make(chan bool, 1)                  //Drive -> ButtonInterface: ButtonInterface waits for Drive to run ElevInit() and pass number of floors
-	quitChan := make(chan bool)                     //All -> All: If value is true, all channels abort
+	//initChan := make(chan bool, 1)                  //Drive -> ButtonInterface: ButtonInterface waits for Drive to run ElevInit() and pass number of floors
+	quitChan := make(chan bool) //All -> All: If value is true, all channels abort
 
-	go elevdriver.Drive(quitChan, allocateOrdersChan, executedOrdersChan, elevStatusChan, setLightsChan, initChan)
-	go elevdriver.ButtonInterface(quitChan, extLightsChan, setLightsChan, buttonPressesChan, allocateOrdersChan, initChan)
+	//go elevdriver.Drive(quitChan, allocateOrdersChan, executedOrdersChan, elevStatusChan, setLightsChan, initChan)
+	//go elevdriver.ButtonInterface(quitChan, extLightsChan, setLightsChan, buttonPressesChan, allocateOrdersChan, initChan)
+	go dummyheis.DummyHeis(quitChan, allocateOrdersChan, executedOrdersChan, extLightsChan, setLightsChan, buttonPressesChan, elevStatusChan)
 	elevnetworkinterface.Start(quitChan, allocateOrdersChan, executedOrdersChan, extLightsChan, setLightsChan, buttonPressesChan, elevStatusChan)
 
 	fmt.Println("Evig comhandler")
