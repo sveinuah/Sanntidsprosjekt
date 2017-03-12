@@ -19,8 +19,10 @@ func DummyHeis(quitChan chan bool, allocateOrdersChan chan OrderType, executedOr
 	for i := range status.MyOrders {
 		status.MyOrders[i] = make([]bool, 3, 3)
 	}
-
 	status.DoorOpen = false
+
+	go makeOrders(buttonPressesChan)
+
 	for {
 		select {
 		case newOrder := <-allocateOrdersChan:
@@ -47,7 +49,27 @@ func handleOrder(order OrderType, executedOrdersChan chan OrderType) {
 }
 
 func getLights(newLights [][]bool) {
-	if oldLights[1][1] != newLights[1][1] {
-		fmt.Println(newLights)
+	for i := 0; i < 4; i++ {
+		for j := 0; j < 3; j++ {
+			if newLights[i][j] != oldLights[i][j] {
+				fmt.Println(newLights)
+				oldLights = newLights
+				return
+			}
+		}
 	}
+}
+
+func makeOrders(buttonPressesChan chan OrderType) {
+	var order = OrderType{Floor: 0, Dir: 0, New: true}
+	timer := time.NewTicker(1 * time.Second)
+	for {
+		<-timer.C
+		order.Floor++
+		if order.Floor == 3 {
+			order.Floor = 0
+		}
+		buttonPressesChan <- order
+	}
+
 }
