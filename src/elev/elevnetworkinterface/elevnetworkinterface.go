@@ -35,7 +35,7 @@ func Start(quitChan chan bool, allocateOrdersChan chan OrderType, executedOrders
 		- make extLights matrix and pass along
 	*/
 
-	name = "Jarvis"
+	name = "Joe"
 
 	statusTxChan := make(chan StatusType, 8)
 	statusReqRxChan := make(chan int, 8)

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"master/testMNI"
+	"runtime"
 	"time"
 	. "typedef"
 )
@@ -10,8 +11,10 @@ import (
 func main() {
 	fmt.Println("Running tests!")
 
+	runtime.GOMAXPROCS(runtime.NumCPU())
+
 	reportNum := 0
-	unitChan := make(chan UnitUpdate)
+	unitChan := make(chan UnitUpdate, 5)
 
 	statusReqChan := make(chan int, 1)
 	statusChan := make(chan StatusType, 10)
@@ -26,7 +29,7 @@ func main() {
 		statusReqChan <- reportNum
 		time.Sleep(300 * time.Millisecond)
 		for len(statusChan) > 0 {
-			fmt.Println("Got report:", <-statusChan)
+			//fmt.Println("Got report:", <-statusChan)
 		}
 		if reportNum > 142 {
 			close(quit)
@@ -36,14 +39,13 @@ func main() {
 	}
 }
 
-func testUnits(unitChan <-chan UnitUpdate, quit <-chan bool)
-{
+func testUnits(unitChan <-chan UnitUpdate, quit <-chan bool) {
 	var units UnitUpdate
 	for {
 		select {
-		case units = <- unitChan:
+		case units = <-unitChan:
 			fmt.Println("Got units:", units)
-		case <- quit:
+		case <-quit:
 			fmt.Println("quitting units")
 			return
 		}
