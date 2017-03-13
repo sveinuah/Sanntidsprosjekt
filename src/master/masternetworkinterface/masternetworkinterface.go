@@ -183,7 +183,7 @@ func sendOrder(masterOrderTx chan OrderType, masterOrderRx chan OrderType, order
 	}
 }
 
-func receiveOrder(masterOrderRx chan OrderType, orderRx chan OrderType, ackTx chan AckType, quitChan chan bool) {
+func receiveOrder(orderRx chan OrderType, masterOrderRx chan OrderType, ackTx chan AckType, quitChan chan bool) {
 	fmt.Println("Starting receiveOrder!")
 	var order OrderType
 	var ack AckType
@@ -193,6 +193,8 @@ func receiveOrder(masterOrderRx chan OrderType, orderRx chan OrderType, ackTx ch
 			fmt.Println("Quitting receiveOrder!")
 			return
 		case order = <-orderRx:
+			fmt.Println("Got order:", order)
+
 			if order.To != "" {
 				break
 			}
@@ -202,6 +204,7 @@ func receiveOrder(masterOrderRx chan OrderType, orderRx chan OrderType, ackTx ch
 			ackTx <- ack
 
 			masterOrderRx <- order
+		default:
 		}
 	}
 }

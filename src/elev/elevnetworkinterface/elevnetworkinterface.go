@@ -51,7 +51,7 @@ func Start(ID string, quitChan chan bool, allocateOrdersChan chan OrderType, exe
 	go bcast.Receiver(RxPort, quitChan, extLightsRx, orderRx, ackRx)
 
 	go transmitStatus(statusTx, elevStatusChan, quitChan)
-	go transmitOrder(buttonPressesChan, executedOrdersChan, orderTx, ackRx, allocateOrdersChan, setLightsChan, quitChan)
+	go transmitOrder(buttonPressesChan, executedOrdersChan, orderTx, ackRx, quitChan)
 	go receiveOrder(allocateOrdersChan, orderRx, ackTx, quitChan)
 	go receiveExtLights(extLightsRx, extLightsChan, quitChan)
 
@@ -76,8 +76,10 @@ func transmitStatus(statusTx chan StatusType, elevStatusChan chan StatusType, qu
 	}
 }
 
-func transmitOrder(buttonPressChan chan OrderType, executedOrdersChan chan OrderType, orderTx chan OrderType, ackRx chan AckType, allocateOrdersChan chan OrderType, setLightsChan chan OrderType, quitChan chan bool) {
+func transmitOrder(buttonPressChan chan OrderType, executedOrdersChan chan OrderType, orderTx chan OrderType, ackRx chan AckType, quitChan chan bool) {
+	var order OrderType
 	var sending bool
+
 	resend := time.NewTicker(RESEND_TIME)
 
 	for {
@@ -85,33 +87,31 @@ func transmitOrder(buttonPressChan chan OrderType, executedOrdersChan chan Order
 		case <-quitChan:
 			resend.Stop()
 			return
-		case order := <-buttonPressChan:
-		case order := <-executedOrdersChan:
-		default:
-			var order OrderType
+		case order = <-buttonPressChan:
+			fmt.Println("Button Order:", order)
+		case order = <-executedOrdersChan:
+			fmt.Println("Exec Order:", order)
 		}
-		if order {
-			sending = true
 
-			order.From = id
-			orderTx <- order
+		sending = true
 
-			timeout := time.After(TIMOUT_TIME)
+		order.From = id
+		orderTx <- order
 
-			for sending {
-				select {
-				case <-timeout:
+		timeout := time.After(TIMOUT_TIME)
+
+		for sending {
+			select {
+			case <-timeout:
+				sending = false
+				fmt.Println("Timed out..")
+			case ack := <-ackRx:
+				if ack.To == id {
 					sending = false
-				case ack := <-ackRx:
-					if ack.To == id {
-						sending = false
-					}
-				case <-resend.C:
-					orderTx <- order
 				}
-
+			case <-resend.C:
+				orderTx <- order
 			}
-
 		}
 	}
 }
