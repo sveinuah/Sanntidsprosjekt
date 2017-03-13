@@ -14,9 +14,9 @@ const (
 	DOOR_OPEN_TIME     = 2 * time.Second
 )
 
-func Drive(quitChan chan bool, allocateOrdersChan chan OrderType, executedOrdersChan chan OrderType, elevStatusChan chan StatusType, setLightsChan chan OrderType, initChan chan bool) {
+func Drive(quitChan <-chan bool, allocateOrdersChan <-chan OrderType, executedOrdersChan chan<- OrderType, elevStatusChan chan StatusType, setLightsChan chan<- OrderType, initChan chan<- bool) {
 	driveInit(initChan)
-	fmt.Println("Initialized!!!")
+	fmt.Println("Drive Initialized!!!")
 	for {
 		getOrders(allocateOrdersChan)
 		//Check floor and see if elev should stop here, move in either direction or stay put
@@ -48,20 +48,19 @@ func Drive(quitChan chan bool, allocateOrdersChan chan OrderType, executedOrders
 		case <-elevStatusChan:
 			elevStatusChan <- status
 		default:
+			elevStatusChan <- status
 		}
 
 	}
 }
 
-func driveInit(initChan chan bool) {
+func driveInit(initChan chan<- bool) {
 	ElevInit()
 	initChan <- true
 	ElevMotorDirection(DIR_UP)
 	for ElevGetFloorSensorSignal() == BETWEEN_FLOORS {
 	}
 	status.CurrentFloor = ElevGetFloorSensorSignal()
-	fmt.Println("Freedom!")
-	fmt.Println(status.CurrentFloor)
 	ElevFloorIndicator(status.CurrentFloor)
 	ElevMotorDirection(DIR_NODIR)
 	status.Direction = DIR_NODIR
@@ -72,7 +71,7 @@ func driveInit(initChan chan bool) {
 	}
 }
 
-func getOrders(allocateOrdersChan chan OrderType) {
+func getOrders(allocateOrdersChan <-chan OrderType) {
 	select {
 	case order := <-allocateOrdersChan:
 		status.MyOrders[order.Floor][order.Dir] = order.New
@@ -81,7 +80,7 @@ func getOrders(allocateOrdersChan chan OrderType) {
 	}
 }
 
-func stopRoutine(executedOrdersChan chan OrderType, setLightsChan chan OrderType, allocateOrdersChan chan OrderType) {
+func stopRoutine(executedOrdersChan chan<- OrderType, setLightsChan chan<- OrderType, allocateOrdersChan <-chan OrderType) {
 	ElevMotorDirection(DIR_NODIR)
 	status.Running = false
 	ElevDoorOpenLight(true)
@@ -192,7 +191,7 @@ func checkOrdersBelow(currentFloor int) bool {
 	return false
 }
 
-func clearOrder(executedOrdersChan chan OrderType, setLightsChan chan OrderType) {
+func clearOrder(executedOrdersChan chan<- OrderType, setLightsChan chan<- OrderType) {
 	var clearOrder OrderType
 	clearOrder.Floor = status.CurrentFloor
 	clearOrder.Dir = status.Direction

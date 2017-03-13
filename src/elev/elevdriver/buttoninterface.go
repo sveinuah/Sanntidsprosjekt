@@ -12,7 +12,8 @@ const DIR_INTERNAL = 2
 var lights [N_FLOORS][N_BUTTONS]bool
 var buttonSent [N_FLOORS][N_BUTTONS]bool
 
-func ButtonInterface(quitChan chan bool, extLightsChan chan [][]bool, setLightsChan chan OrderType, buttonPressesChan chan OrderType, allocateOrdersChan chan OrderType, initChan chan bool) {
+func ButtonInterface(quitChan <-chan bool, extLightsChan <-chan [][]bool, setLightsChan <-chan OrderType, buttonPressesChan chan<- OrderType, allocateOrdersChan chan<- OrderType, initChan <-chan bool) {
+	<-initChan
 	for {
 		//Get new button presses and send order up/to drive
 		for floor := 0; floor < N_FLOORS; floor++ {
@@ -66,10 +67,4 @@ func ButtonInterface(quitChan chan bool, extLightsChan chan [][]bool, setLightsC
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
-}
-
-func buttonInterfaceInit(initChan chan int) {
-	<-initChan
-	//wait for drive to run elevInit, return N_FLOORS
-	lights = [N_FLOORS][N_BUTTONS]bool{{false}}
 }

@@ -38,21 +38,21 @@ const (
 	}
 }*/
 
-func Init(ID string, masterBackupChan chan [][]MasterOrder, unitUpdateChan chan UnitUpdate, numFloorsChan chan int, quitChan chan bool) {
+func Init_MNI(ID string, masterBackupChan chan [][]MasterOrder, unitUpdateChan chan UnitUpdate, quitChan chan bool) int {
 
 	name = ID
 
-	statusChan := make(chan StatusType)
-	statusRxChan := make(chan StatusType)
+	statusChan := make(chan StatusType, 10)
+	statusRxChan := make(chan StatusType, 10)
 
-	ackTxChan := make(chan AckType)
-	ackRxChan := make(chan AckType)
-	statusReqChan := make(chan AckType)
+	ackTxChan := make(chan AckType, 10)
+	ackRxChan := make(chan AckType, 100)
+	statusReqChan := make(chan int, 10)
 	var statusAckTx AckType
 	statusAckTx.Type = "Status"
 	statusAckTx.ID = 1
 
-	peerUpdateChan := make(chan peers.PeerUpdate)
+	peerUpdateChan := make(chan peers.PeerUpdate, 100)
 
 	go peers.Transmitter(peersComPort, name+":"+MASTER, quitChan)
 	go peers.Receiver(peersComPort, peerUpdateChan, quitChan)
@@ -61,43 +61,41 @@ func Init(ID string, masterBackupChan chan [][]MasterOrder, unitUpdateChan chan 
 
 	go translatePeerUpdates(peerUpdateChan, unitUpdateChan, quitChan)
 	go requestAndReceiveStatus(statusChan, statusRxChan, statusReqChan, ackTxChan, quitChan)
+
 	fmt.Println("All goroutines are go!")
-	ackTxChan <- statusAckTx
+	statusReqChan <- 1
 
 	for {
 		select {
-		case <-quitChan:
-			return
-		case <-time.After(resendTime):
-			fmt.Println("Sending Status Req")
-			ackTxChan <- statusAckTx
 		case status := <-statusChan:
+			for len(statusChan) > 0 {
+				<-statusChan
+			}
 			return len(status.MyOrders)
-		default:
 		}
 	}
 }
 
 func Active(unitUpdateChan chan UnitUpdate, orderTx chan OrderType, orderRx chan OrderType, masterBackupChan chan [][]MasterOrder, statusChan chan StatusType, statusReqChan chan int, lightsChan chan [][]bool, quitChan chan bool) {
 
-	statusRxChan := make(chan StatusType)
+	statusRxChan := make(chan StatusType, 100)
 
-	ackTxChan := make(chan AckType)
-	ackRxChan := make(chan AckType)
+	ackTxChan := make(chan AckType, 10)
+	ackRxChan := make(chan AckType, 100)
 
-	peerUpdateChan := make(chan peers.PeerUpdate)
+	peerUpdateChan := make(chan peers.PeerUpdate, 100)
 
-	newOrderTxChan := make(chan OrderType)
-	newOrderackRxChan := make(chan bool)
+	newOrderTxChan := make(chan OrderType, 100)
+	newOrderackRxChan := make(chan bool, 10)
 
-	extOrderRxChan := make(chan OrderType)
+	extOrderRxChan := make(chan OrderType, 100)
 
-	lightsTxChan := make(chan [][]bool)
+	lightsTxChan := make(chan [][]bool, 10)
 
-	go peers.Transmitter(peersComPort, string(name)+":"+MASTER, quitChan)
+	go peers.Transmitter(peersComPort, name+":"+MASTER, quitChan)
 	go peers.Receiver(peersComPort, peerUpdateChan, quitChan)
 
-	go bcast.Transmitter(txPort, quitChan, newOrderTxChan, masterBackupChan, lightsTxChan)
+	go bcast.Transmitter(txPort, quitChan, newOrderTxChan, masterBackupChan, lightsTxChan, ackTxChan)
 	go bcast.Receiver(rxPort, quitChan, statusRxChan, extOrderRxChan, ackRxChan)
 
 	go requestAndReceiveStatus(statusChan, statusRxChan, statusReqChan, ackTxChan, quitChan)
@@ -105,27 +103,30 @@ func Active(unitUpdateChan chan UnitUpdate, orderTx chan OrderType, orderRx chan
 	go receiveOrder(extOrderRxChan, orderRx, ackTxChan, quitChan)
 	go translatePeerUpdates(peerUpdateChan, unitUpdateChan, quitChan)
 	go receiveAckHandler(ackRxChan, newOrderackRxChan, quitChan)
+	go broadcastExtLights(lightsChan, lightsTxChan, quitChan)
 
 }
 
 func Passive(masterBackupChan chan [][]MasterOrder, unitUpdateChan chan UnitUpdate, quitChan chan bool) {
 
-	peerUpdateChan := make(chan peers.PeerUpdate)
+	peerUpdateChan := make(chan peers.PeerUpdate, 100)
 
 	//Receive Backup
 	go bcast.Receiver(rxPort, quitChan, masterBackupChan)
 
 	// Call and poll network for units
-	go peers.Transmitter(peersComPort, string(name)+":"+MASTER, quitChan)
+	go peers.Transmitter(peersComPort, name+":"+MASTER, quitChan)
 	go peers.Receiver(peersComPort, peerUpdateChan, quitChan)
 	go translatePeerUpdates(peerUpdateChan, unitUpdateChan, quitChan)
 }
 
 func receiveAckHandler(ackRxChan chan AckType, newOrderackRxChan chan bool, quitChan chan bool) {
+	fmt.Println("Starting receiveAckHandler!")
 	var AckRec AckType
 	for {
 		select {
 		case <-quitChan:
+			fmt.Println("Quitting recAckHandler!")
 			return
 
 		case AckRec = <-ackRxChan:
@@ -136,7 +137,8 @@ func receiveAckHandler(ackRxChan chan AckType, newOrderackRxChan chan bool, quit
 	}
 }
 
-func requestAndReceiveStatus(statusChan chan StatusType, statusRxChan chan StatusType, statusReqChan chan int, ackTxChan chan AckType, quitChan chan bool) {
+func requestAndReceiveStatus(statusChan chan StatusType, statusRxChan chan StatusType, statusReqChan chan int, ackTxChan chan AckType, quitChan <-chan bool) {
+	fmt.Println("Starting Req and Rec Status!")
 	var reqStat AckType
 	var ackStat AckType
 	var recStatus StatusType
@@ -147,14 +149,17 @@ func requestAndReceiveStatus(statusChan chan StatusType, statusRxChan chan Statu
 	for {
 		select {
 		case <-quitChan:
+			fmt.Println("Quitting Req and Rec Status")
 			return
 
 		//Master requests statusupdates.
 		case reqStat.ID = <-statusReqChan:
+			//fmt.Println("Sending Status Request")
 			ackTxChan <- reqStat
 
 		//Handling the received statuses.
 		case recStatus = <-statusRxChan:
+			//fmt.Println("Got Status from:", recStatus.From)
 
 			ackStat.To = recStatus.From
 			ackStat.ID = recStatus.ID
@@ -172,12 +177,52 @@ func requestAndReceiveStatus(statusChan chan StatusType, statusRxChan chan Statu
 	}
 }
 
+func translatePeerUpdates(peerUpdateChan chan peers.PeerUpdate, unitUpdateChan chan UnitUpdate, quitChan chan bool) {
+	fmt.Println("Starting translatePeerUpdates!")
+	var newPeerUpdate peers.PeerUpdate
+	var newUnitUpdate UnitUpdate
+	var newUnit UnitType
+	for {
+		select {
+		case <-quitChan:
+			fmt.Println("Quitting translatePeerUpdates!")
+			return
+		case newPeerUpdate = <-peerUpdateChan:
+			newUnitUpdate = UnitUpdate{}
+			for _, val := range newPeerUpdate.Peers {
+				strArr := strings.Split(val, ":")
+				newUnit.Type = strArr[1]
+				newUnit.ID = string(strArr[0])
+				newUnitUpdate.Peers = append(newUnitUpdate.Peers, newUnit)
+			}
+
+			if newPeerUpdate.New != "" {
+				newUnit.Type = strings.Split(newPeerUpdate.New, ":")[1]
+				newUnit.ID = strings.Split(newPeerUpdate.New, ":")[0]
+				newUnitUpdate.New = newUnit
+			}
+
+			for _, val := range newPeerUpdate.Lost {
+				strArr := strings.Split(val, ":")
+				newUnit.Type = strArr[1]
+				newUnit.ID = string(strArr[0])
+				newUnitUpdate.Lost = append(newUnitUpdate.Lost, newUnit)
+			}
+
+			unitUpdateChan <- newUnitUpdate
+		default:
+		}
+	}
+}
+
 func sendNewOrder(newOrderChan chan OrderType, newOrderTxChan chan OrderType, newOrderackRxChan chan bool, quitChan chan bool) {
+	fmt.Println("Starting sendNewOrder!")
 	var newOrder OrderType
 	var sending bool
 	for {
 		select {
 		case <-quitChan:
+			fmt.Println("Quitting sendNewOrder!")
 			return
 
 		case newOrder = <-newOrderChan:
@@ -218,14 +263,18 @@ func sendNewOrder(newOrderChan chan OrderType, newOrderTxChan chan OrderType, ne
 	}
 }
 
-func receiveOrder(extOrderRxChan chan OrderType, orderRx chan OrderType, ackTxChan chan AckType, quitChan chan bool) {
+func receiveOrder(extOrderRxChan chan OrderType, orderRxChan chan OrderType, ackTxChan chan AckType, quitChan chan bool) {
+	fmt.Println("Starting receiveOrder!")
 	var extOrder OrderType
 	var AckRec AckType
 	for {
 		select {
 		case <-quitChan:
+			fmt.Println("Quitting receiveOrder!")
 			return
 		case extOrder = <-extOrderRxChan:
+			//fmt.Println("Got Order:", extOrder)
+
 			if extOrder.To != "" {
 				break
 			}
@@ -238,61 +287,34 @@ func receiveOrder(extOrderRxChan chan OrderType, orderRx chan OrderType, ackTxCh
 			}
 
 			AckRec.To = extOrder.From
+
+			//fmt.Println("Ack Order", AckRec)
 			ackTxChan <- AckRec
 
-			orderRx <- extOrder
+			orderRxChan <- extOrder
 		default:
 		}
 	}
 }
 
 func broadcastExtLights(lightsChan chan [][]bool, lightsTxChan chan [][]bool, quitChan chan bool) {
+	fmt.Println("Starting broadcastExtLights!")
 	var lights [][]bool
-	resendTimer := time.NewTimer(2 * resendTime)
+	t := time.Tick(20 * resendTime)
+
 	for {
 		select {
 		case <-quitChan:
-			resendTimer.Stop()
+			fmt.Println("Quitting broadCastExtLigths!")
 			return
 
-		case <-resendTimer.C:
-			lightsTxChan <- lights
-			resendTimer.Reset(resendTime)
+		case <-t:
+			for len(lights) > 0 {
+				lightsTxChan <- lights
+			}
 
 		case lights = <-lightsChan:
-		default:
-		}
-	}
-}
-
-func translatePeerUpdates(peerUpdateChan chan peers.PeerUpdate, unitUpdateChan chan UnitUpdate, quitChan chan bool) {
-	var newPeerUpdate peers.PeerUpdate
-	var newUnitUpdate UnitUpdate
-	var newUnit UnitType
-	for {
-		select {
-		case <-quitChan:
-		case newPeerUpdate = <-peerUpdateChan:
-
-			for _, val := range newPeerUpdate.Peers {
-				strArr := strings.Split(val, ":")
-				newUnit.Type = strArr[1]
-				newUnit.ID = string(strArr[0])
-				newUnitUpdate.Peers = append(newUnitUpdate.Peers, newUnit)
-			}
-
-			newUnit.Type = strings.Split(newPeerUpdate.New, ":")[1]
-			newUnit.ID = strings.Split(newPeerUpdate.New, ":")[0]
-			newUnitUpdate.New = newUnit
-
-			for _, val := range newPeerUpdate.Lost {
-				strArr := strings.Split(val, ":")
-				newUnit.Type = strArr[1]
-				newUnit.ID = string(strArr[0])
-				newUnitUpdate.Lost = append(newUnitUpdate.Lost, newUnit)
-			}
-
-			unitUpdateChan <- newUnitUpdate
+			fmt.Println("Got LightUpdate", lights)
 		default:
 		}
 	}
