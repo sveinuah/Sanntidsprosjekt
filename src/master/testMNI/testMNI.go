@@ -31,6 +31,7 @@ func Init_tmni(statusReqChan chan int, statusChan chan StatusType, unitUpdateCha
 	newOrderackRxChan := make(chan bool, 1)
 	newOrderTxChan := make(chan OrderType, 100)
 	ackRxChan := make(chan AckType, 100)
+	extOrderRxChan := make(chan OrderType, 100)
 
 	go peers.Receiver(peersComPort, peerUpdateChan, quitChan)
 	go bcast.Transmitter(txPort, quitChan, ackTxChan, newOrderTxChan)
@@ -38,7 +39,7 @@ func Init_tmni(statusReqChan chan int, statusChan chan StatusType, unitUpdateCha
 
 	go requestAndReceiveStatus(statusChan, statusRxChan, statusReqChan, ackTxChan, quitChan)
 	go translatePeerUpdates(peerUpdateChan, unitUpdateChan, quitChan)
-	go sendNewOrder(newOrderChan, orderTxChan, newOrderackRxChan, quitChan)
+	go sendNewOrder(orderTxChan, newOrderTxChan, newOrderackRxChan, quitChan)
 	go receiveAckHandler(ackRxChan, newOrderackRxChan, quitChan)
 	go receiveOrder(extOrderRxChan, orderRxChan, ackTxChan, quitChan)
 }
