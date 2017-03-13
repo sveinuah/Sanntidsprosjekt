@@ -42,8 +42,7 @@ func DummyHeis(quitChan chan bool, allocateOrdersChan chan OrderType, executedOr
 }
 
 func handleOrder(order OrderType, executedOrdersChan chan OrderType) {
-	timer := time.After(4 * time.Second)
-	<-timer
+	time.Sleep(4 * time.Second)
 	order.New = false
 	executedOrdersChan <- order
 }
@@ -66,7 +65,7 @@ func makeOrders(buttonPressesChan chan OrderType) {
 	for {
 		<-timer.C
 		order.Floor++
-		if order.Floor == 3 {
+		if order.Floor == 4 {
 			order.Floor = 0
 		}
 		buttonPressesChan <- order
