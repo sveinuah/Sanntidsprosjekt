@@ -225,10 +225,10 @@ func broadcastExtLights(masterLightsTx chan [][]bool, lightsTx chan [][]bool, qu
 		case <-t.C:
 			if len(lights) > 1 {
 				lightsTx <- lights
-				fmt.Println("Sending Lights:", lights)
+				//fmt.Println("Sending Lights:", lights)
 			}
 		case lights = <-masterLightsTx:
-			fmt.Println("Got LightUpdate", lights)
+			//fmt.Println("Got LightUpdate", lights)
 		}
 	}
 }

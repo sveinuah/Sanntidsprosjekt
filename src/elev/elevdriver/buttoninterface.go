@@ -7,7 +7,10 @@ import (
 	. "typedef"
 )
 
-const DIR_INTERNAL = 2
+const (
+	DIR_INTERNAL = 2
+	SLEEP_TIME   = 100 * time.Millisecond
+)
 
 var lights [N_FLOORS][N_BUTTONS]bool
 var buttonSent [N_FLOORS][N_BUTTONS]bool
@@ -62,6 +65,6 @@ func ButtonInterface(quitChan <-chan bool, extLightsChan <-chan [][]bool, setLig
 			return
 		default:
 		}
-		time.Sleep(200 * time.Millisecond)
+		time.Sleep(SLEEP_TIME)
 	}
 }

@@ -24,7 +24,6 @@ const TxPort = 20014
 const RxPort = 30014
 const peersComPort = 40014
 
-var CONNECTED = true
 var cMutex = &sync.Mutex{}
 
 func Start(ID string, quitChan chan bool, allocateOrdersChan chan OrderType, executedOrdersChan chan OrderType, extLightsChan chan [][]bool, setLightsChan chan OrderType, buttonPressesChan chan OrderType, elevStatusChan chan StatusType) {
@@ -52,7 +51,7 @@ func Start(ID string, quitChan chan bool, allocateOrdersChan chan OrderType, exe
 	go bcast.Receiver(RxPort, quitChan, extLightsRx, orderRx, ackRx)
 
 	go transmitStatus(statusTx, elevStatusChan, quitChan)
-	go transmitOrder(buttonPressesChan, executedOrdersChan, orderTx, ackRx, quitChan)
+	go transmitOrder(buttonPressesChan, executedOrdersChan, setLightsChan, orderTx, ackRx, quitChan)
 	go receiveOrder(allocateOrdersChan, orderRx, ackTx, quitChan)
 	go receiveExtLights(extLightsRx, extLightsChan, quitChan)
 
@@ -77,7 +76,7 @@ func transmitStatus(statusTx chan StatusType, elevStatusChan chan StatusType, qu
 	}
 }
 
-func transmitOrder(buttonPressChan chan OrderType, executedOrdersChan chan OrderType, orderTx chan OrderType, ackRx chan AckType, quitChan chan bool) {
+func transmitOrder(buttonPressChan chan OrderType, executedOrdersChan chan OrderType, setLightsChan chan OrderType, orderTx chan OrderType, ackRx chan AckType, quitChan chan bool) {
 	var order OrderType
 	var sending bool
 
@@ -111,6 +110,9 @@ func transmitOrder(buttonPressChan chan OrderType, executedOrdersChan chan Order
 			case <-timeout:
 				sending = false
 				fmt.Println("Timed out..")
+				if order.New == false {
+					setLightsChan <- order
+				}
 			case ack := <-ackRx:
 				fmt.Println("Got Any Ack..")
 				if ack.To == id {
@@ -145,15 +147,11 @@ func receiveOrder(allocateOrdersChan chan OrderType, orderRx chan OrderType, ack
 
 func receiveExtLights(extLightsRx chan [][]bool, extLightsChan chan [][]bool, quitChan chan bool) {
 	var extLights [][]bool
-	var counter int
 	for {
 		select {
 		case <-quitChan:
 			return
 		case extLights = <-extLightsRx:
-			fmt.Print("Got Lights:", extLights)
-			counter++
-			fmt.Println(counter)
 			extLightsChan <- extLights
 		}
 	}

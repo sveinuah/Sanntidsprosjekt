@@ -147,7 +147,7 @@ func active(sync chan [][]typedef.MasterOrder, done chan bool, quitChan chan boo
 			unitMutex.Unlock()
 			fmt.Println("Got Units", units)
 		case report := <-statusChan:
-			fmt.Println("Got report")
+			//fmt.Println("Got report")
 			elevReports[report.From] = report
 		case <-quitChan:
 			close(subQuit)
