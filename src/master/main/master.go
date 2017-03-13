@@ -12,9 +12,9 @@ import (
 )
 
 const (
-	masterSyncInterval = 100 // in milliseconds
-	initWaitTime       = 3   // in seconds
-	reportInterval     = 2   // in seconds
+	masterSyncInterval = 100 * time.Millisecond
+	initWaitTime       = 3 // in seconds
+	reportInterval     = 2 // in seconds
 
 	stateGoActive  int = 0
 	stateActive    int = 1
@@ -41,8 +41,8 @@ func main() {
 	var state int
 	var lastState int
 
-	syncTimer := time.Tick(masterSyncInterval * time.Millisecond)
-	syncChan := make(chan [][]typedef.MasterOrder)
+	syncTimer := time.NewTicker(masterSyncInterval)
+	syncChan := make(chan [][]typedef.MasterOrder, 1)
 	quitChan := make(chan bool)
 	doneChan := make(chan bool)
 
@@ -68,6 +68,7 @@ func main() {
 		case statePassive:
 			select {
 			case orderList = <-syncChan:
+				fmt.Println("Getting backup")
 			default:
 			}
 			lastState = statePassive
@@ -78,7 +79,8 @@ func main() {
 			fallthrough
 		case stateActive:
 			select {
-			case <-syncTimer:
+			case <-syncTimer.C:
+				fmt.Println("Syncing")
 				syncChan <- orderList
 			default:
 			}
@@ -88,6 +90,7 @@ func main() {
 			close(quitChan)
 			return
 		default:
+			time.Sleep(masterSyncInterval)
 		}
 	}
 }
@@ -99,7 +102,7 @@ func passive(sync chan [][]typedef.MasterOrder, quitChan chan bool) {
 	unitChan := make(chan typedef.UnitUpdate, 1)
 	subQuit := make(chan bool)
 
-	masternetworkinterface.Passive(sync, unitChan, quitChan)
+	masternetworkinterface.Passive(sync, unitChan, subQuit)
 
 	for {
 		select {
@@ -110,7 +113,7 @@ func passive(sync chan [][]typedef.MasterOrder, quitChan chan bool) {
 			fmt.Println("Got Units", units)
 		case <-quitChan:
 			close(subQuit)
-			fmt.Println("Aborting passive go-goutine")
+			fmt.Println("Aborting passive go-routine")
 			return
 		}
 	}
@@ -136,7 +139,7 @@ func active(sync chan [][]typedef.MasterOrder, done chan bool, quitChan chan boo
 	lightChan := make(chan [][]bool, 10)
 	subQuit := make(chan bool)
 
-	masternetworkinterface.Active(unitChan, orderTx, orderRx, sync, statusChan, lightChan, quitChan)
+	masternetworkinterface.Active(unitChan, orderTx, orderRx, sync, statusChan, lightChan, subQuit)
 
 	for {
 		select {
@@ -146,12 +149,31 @@ func active(sync chan [][]typedef.MasterOrder, done chan bool, quitChan chan boo
 			units = update
 			unitMutex.Unlock()
 			fmt.Println("Got Units", units)
+
+			//If elevator returns to active: clear its ext orders and set its int orders according to backup
+			//Not dealing with lights atm...
+			if units.New.Type == typedef.SLAVE {
+				for unitID, report := range elevReports {
+					if units.New.ID == unitID {
+						var order = typedef.OrderType{unitID, id, 0, typedef.DIR_NODIR, true}
+						for floor := 0; floor < numFloors; floor++ {
+							if report.MyOrders[floor][typedef.DIR_NODIR] == true {
+								order.Floor = floor
+								orderTx <- order
+							}
+						}
+					}
+				}
+			}
+
 		case report := <-statusChan:
 			//fmt.Println("Got report")
 			elevReports[report.From] = report
 		case <-quitChan:
 			close(subQuit)
 			fmt.Println("aborting active routine")
+			time.Sleep(250 * time.Millisecond)
+			done <- true
 			return
 		case order := <-orderRx:
 			fmt.Println("Order:", order)
@@ -178,6 +200,9 @@ func active(sync chan [][]typedef.MasterOrder, done chan bool, quitChan chan boo
 }
 
 // Help functions below  :)
+func fillDoneChan(doneChan chan bool) {
+	doneChan <- true
+}
 
 // initialize uses the network interface to find other Masters/Slaves and get synchronization data.
 // terminates initiated go-routines after it is finished.

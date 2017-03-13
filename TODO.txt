@@ -1,0 +1,3 @@
+- Master er ikke noe flink til å gå passive: pga stenge goroutines skikkelig: Kan Sveinung noe om
+- Trenger støtte for flere PCer
+- Test om estimated tid for ordre fungerer (delegerer ordre på nytt ved timeout?)

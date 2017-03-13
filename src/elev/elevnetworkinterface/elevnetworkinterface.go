@@ -9,16 +9,11 @@ import (
 	. "typedef"
 )
 
-//abortChan, allocateOrdersChan, executedOrdersChan, extLightsChan, extReportChan, elevStatusChan
-
-//Variables
-
 var id string
 
 const STATUS_RESEND_TIME = 500 * time.Millisecond
 const RESEND_TIME = 20 * time.Millisecond
 const TIMOUT_TIME = 200 * time.Millisecond
-const INDEPENDENT = false //If independent the elevator will handle its own external orders when disconnected.
 
 const TxPort = 20014
 const RxPort = 30014
@@ -52,9 +47,8 @@ func Start(ID string, quitChan chan bool, allocateOrdersChan chan OrderType, exe
 
 	go transmitStatus(statusTx, elevStatusChan, quitChan)
 	go transmitOrder(buttonPressesChan, executedOrdersChan, setLightsChan, orderTx, ackRx, quitChan)
-	go receiveOrder(allocateOrdersChan, orderRx, ackTx, quitChan)
+	go receiveOrder(allocateOrdersChan, setLightsChan, orderRx, ackTx, quitChan)
 	go receiveExtLights(extLightsRx, extLightsChan, quitChan)
-
 }
 
 func transmitStatus(statusTx chan StatusType, elevStatusChan chan StatusType, quitChan chan bool) {
@@ -126,7 +120,7 @@ func transmitOrder(buttonPressChan chan OrderType, executedOrdersChan chan Order
 	}
 }
 
-func receiveOrder(allocateOrdersChan chan OrderType, orderRx chan OrderType, ackTx chan AckType, quitChan chan bool) {
+func receiveOrder(allocateOrdersChan chan OrderType, setLightsChan chan OrderType, orderRx chan OrderType, ackTx chan AckType, quitChan chan bool) {
 	var ack AckType
 	ack.From = id
 
@@ -140,6 +134,10 @@ func receiveOrder(allocateOrdersChan chan OrderType, orderRx chan OrderType, ack
 				ack.To = order.From
 				ackTx <- ack
 				allocateOrdersChan <- order
+
+				if order.Dir == DIR_NODIR {
+					setLightsChan <- order
+				}
 			}
 		}
 	}

@@ -75,7 +75,7 @@ func Passive(masterBackupChan chan [][]MasterOrder, unitUpdateChan chan UnitUpda
 	peerUpdateChan := make(chan peers.PeerUpdate, 100)
 
 	//Receive Backup
-	go bcast.Receiver(rxPort, quitChan, masterBackupChan)
+	go bcast.Receiver(txPort, quitChan, masterBackupChan)
 
 	// Call and poll network for units
 	go peers.Transmitter(peersComPort, id+":"+MASTER, quitChan)
