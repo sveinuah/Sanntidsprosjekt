@@ -21,14 +21,15 @@ func Transmitter(port int, id string, quitChan chan bool) {
 	fmt.Println("Starting Peer Transmitter")
 	conn := conn.DialBroadcastUDP(port)
 	addr, _ := net.ResolveUDPAddr("udp4", fmt.Sprintf("255.255.255.255:%d", port))
-	t := time.Tick(interval)
+	t := time.NewTicker(interval)
 
 	for {
 		select {
 		case <-quitChan:
 			fmt.Println("Quitting peer transmitter!")
+			t.Stop()
 			return
-		case <-t:
+		case <-t.C:
 			conn.WriteTo([]byte(id), addr)
 		}
 	}

@@ -15,8 +15,9 @@ import (
 
 var id string
 
-const RESEND_TIME = 15 * time.Millisecond
-const TIMOUT_TIME = 2000 * time.Millisecond
+const STATUS_RESEND_TIME = 500 * time.Millisecond
+const RESEND_TIME = 20 * time.Millisecond
+const TIMOUT_TIME = 200 * time.Millisecond
 const INDEPENDENT = false //If independent the elevator will handle its own external orders when disconnected.
 
 const TxPort = 20014
@@ -60,7 +61,7 @@ func Start(ID string, quitChan chan bool, allocateOrdersChan chan OrderType, exe
 func transmitStatus(statusTx chan StatusType, elevStatusChan chan StatusType, quitChan chan bool) {
 	var status StatusType
 	var counter int = 0
-	t := time.Tick(250 * time.Millisecond)
+	t := time.Tick(STATUS_RESEND_TIME)
 	for {
 		select {
 		case <-quitChan:
@@ -96,6 +97,11 @@ func transmitOrder(buttonPressChan chan OrderType, executedOrdersChan chan Order
 		sending = true
 
 		order.From = id
+
+		for len(ackRx) > 0 {
+			fmt.Println(len(ackRx))
+			<-ackRx
+		}
 		orderTx <- order
 
 		timeout := time.After(TIMOUT_TIME)
@@ -106,8 +112,10 @@ func transmitOrder(buttonPressChan chan OrderType, executedOrdersChan chan Order
 				sending = false
 				fmt.Println("Timed out..")
 			case ack := <-ackRx:
+				fmt.Println("Got Any Ack..")
 				if ack.To == id {
 					sending = false
+					fmt.Println("Got Ack! :D")
 				}
 			case <-resend.C:
 				orderTx <- order
@@ -127,6 +135,7 @@ func receiveOrder(allocateOrdersChan chan OrderType, orderRx chan OrderType, ack
 		case order := <-orderRx:
 			if order.To == id {
 				fmt.Println(id, " received order", order)
+				ack.To = order.From
 				ackTx <- ack
 				allocateOrdersChan <- order
 			}
@@ -136,11 +145,15 @@ func receiveOrder(allocateOrdersChan chan OrderType, orderRx chan OrderType, ack
 
 func receiveExtLights(extLightsRx chan [][]bool, extLightsChan chan [][]bool, quitChan chan bool) {
 	var extLights [][]bool
+	var counter int
 	for {
 		select {
 		case <-quitChan:
 			return
 		case extLights = <-extLightsRx:
+			fmt.Print("Got Lights:", extLights)
+			counter++
+			fmt.Println(counter)
 			extLightsChan <- extLights
 		}
 	}

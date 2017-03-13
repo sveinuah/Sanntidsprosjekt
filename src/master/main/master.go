@@ -129,46 +129,40 @@ func active(sync chan [][]typedef.MasterOrder, done chan bool, quitChan chan boo
 
 	elevReports := make(map[string]typedef.StatusType)
 
-	statusChan := make(chan typedef.StatusType, 10)
-	unitChan := make(chan typedef.UnitUpdate, 10)
+	statusChan := make(chan typedef.StatusType, 100)
+	unitChan := make(chan typedef.UnitUpdate, 100)
 	orderRx := make(chan typedef.OrderType, 100)
 	orderTx := make(chan typedef.OrderType, 100)
-	lightChan := make(chan [][]bool, 1)
+	lightChan := make(chan [][]bool, 10)
 	subQuit := make(chan bool)
 
-	reportAccess := make(chan bool, 1)
-	reportAccess <- true
-
 	masternetworkinterface.Active(unitChan, orderTx, orderRx, sync, statusChan, lightChan, quitChan)
-
-	//go orders(elevReports, reportAccess, orderRx, orderTx, lightChan, subQuit, ordersDone)
 
 	for {
 		select {
 		case update := <-unitChan:
+			fmt.Println("what?")
 			unitMutex.Lock()
 			units = update
 			unitMutex.Unlock()
 			fmt.Println("Got Units", units)
 		case report := <-statusChan:
-			//fmt.Println("Got report")
-			<-reportAccess
+			fmt.Println("Got report")
 			elevReports[report.From] = report
-			reportAccess <- true
 		case <-quitChan:
 			close(subQuit)
 			fmt.Println("aborting active routine")
 			return
 		case order := <-orderRx:
+			fmt.Println("Order:", order)
 			handleReceivedOrder(order, externalLights)
 			lightChan <- externalLights
-			fmt.Println("Order:", order)
 		default:
 			for i := range orderList {
 				for j, order := range orderList[i] {
 					diff := time.Now().Sub(order.Estimated)
 					if order.Order.To == "" && order.Order.From != "" || (int(diff) > 0 && !order.Estimated.IsZero()) {
-						to, estim := findSuitedSlave(elevReports, reportAccess, order) // 2 sek pr etasje + 2 sek pr stop + leeway
+						to, estim := findSuitedSlave(elevReports, order) // 2 sek pr etasje + 2 sek pr stop + leeway
 						if to != id {
 							fmt.Println("To:", to)
 							orderList[i][j].Order.To = to
@@ -263,10 +257,12 @@ func handleReceivedOrder(o typedef.OrderType, lights [][]bool) {
 		if orderList[o.Floor][o.Dir].Order.From == id && o.From != id {
 			return
 		}
+		fmt.Println("Addmin order")
 		orderList[o.Floor][o.Dir] = typedef.MasterOrder{Order: o}
 		lights[o.Floor][o.Dir] = true
 		return
 	}
+	fmt.Println("Deleting order")
 	orderList[o.Floor][o.Dir] = typedef.MasterOrder{} //clear order
 	(lights)[o.Floor][o.Dir] = false
 }
@@ -274,16 +270,19 @@ func handleReceivedOrder(o typedef.OrderType, lights [][]bool) {
 // findAppropriate provides a cost function to find which slave is best suited for the order
 // It calculates an estimate for when the order should be finished.
 // This function reads from global values.
-func findSuitedSlave(reports map[string]typedef.StatusType, reportAccess chan bool, o typedef.MasterOrder) (string, time.Time) {
+func findSuitedSlave(reports map[string]typedef.StatusType, o typedef.MasterOrder) (string, time.Time) {
 	cost := 10000 //high number
 	chosenUnit := id
-
+	//Mutex is not the problem
 	unitMutex.Lock()
-	defer unitMutex.Unlock()
-	for _, unit := range units.Peers {
-		<-reportAccess
+	tempUnits := make([]typedef.UnitType, len(units.Peers))
+	for i, unit := range units.Peers {
+		tempUnits[i] = unit
+	}
+	unitMutex.Unlock()
+
+	for _, unit := range tempUnits {
 		report := reports[unit.ID]
-		reportAccess <- true
 
 		if unit.Type == typedef.SLAVE && report.From != "" {
 			tempCost := 0

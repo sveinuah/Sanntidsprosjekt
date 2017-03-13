@@ -13,12 +13,11 @@ import (
 
 //Variables
 var id string
-var messageTimedOut = 0
 
 const (
-	resendTime      = 50 * time.Millisecond
-	lightResendTime = 100 * time.Millisecond
-	timeOutTime     = 95 * time.Millisecond
+	resendTime      = 20 * time.Millisecond
+	lightResendTime = 200 * time.Millisecond
+	timeOutTime     = 200 * time.Millisecond
 
 	rxPort       = 20014
 	txPort       = 30014
@@ -49,12 +48,12 @@ func Active(unitUpdateChan chan UnitUpdate, masterOrderTx chan OrderType, master
 	peerUpdateChan := make(chan peers.PeerUpdate, 100)
 
 	statusRx := make(chan StatusType, 100)
-	lightsTx := make(chan [][]bool, 10)
+	lightsTx := make(chan [][]bool, 100)
 
 	orderRx := make(chan OrderType, 100)
 	orderTx := make(chan OrderType, 100)
 
-	ackTx := make(chan AckType, 10)
+	ackTx := make(chan AckType, 100)
 	ackRx := make(chan AckType, 100)
 
 	go peers.Transmitter(peersComPort, id+":"+MASTER, quitChan)
@@ -157,7 +156,9 @@ func sendOrder(masterOrderTx chan OrderType, masterOrderRx chan OrderType, order
 
 			sending = true
 
-			// Move new order into transmit channel
+			for len(ackRx) > 0 {
+				<-ackRx
+			}
 			orderTx <- order
 
 			// While we wait for acknowledge from Elevator:
@@ -179,6 +180,7 @@ func sendOrder(masterOrderTx chan OrderType, masterOrderRx chan OrderType, order
 					orderTx <- order
 				}
 			}
+			resend.Stop()
 		}
 	}
 }
@@ -196,15 +198,16 @@ func receiveOrder(orderRx chan OrderType, masterOrderRx chan OrderType, ackTx ch
 			fmt.Println("Got order:", order)
 
 			if order.To != "" {
+				fmt.Println("Breaking!")
 				break
 			}
 
 			ack.To = order.From
 			ack.From = id
 			ackTx <- ack
+			fmt.Println("Sent Ack", ack)
 
 			masterOrderRx <- order
-		default:
 		}
 	}
 }
@@ -212,19 +215,18 @@ func receiveOrder(orderRx chan OrderType, masterOrderRx chan OrderType, ackTx ch
 func broadcastExtLights(masterLightsTx chan [][]bool, lightsTx chan [][]bool, quitChan chan bool) {
 	fmt.Println("Starting broadcastExtLights!")
 	var lights [][]bool
-	t := time.Tick(lightResendTime)
+	t := time.NewTicker(lightResendTime)
 
 	for {
 		select {
 		case <-quitChan:
 			fmt.Println("Quitting broadCastExtLigths!")
 			return
-
-		case <-t:
-			for len(lights) > 0 {
+		case <-t.C:
+			if len(lights) > 1 {
 				lightsTx <- lights
+				fmt.Println("Sending Lights:", lights)
 			}
-
 		case lights = <-masterLightsTx:
 			fmt.Println("Got LightUpdate", lights)
 		}
