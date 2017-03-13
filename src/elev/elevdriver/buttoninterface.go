@@ -10,7 +10,6 @@ import (
 const DIR_INTERNAL = 2
 
 var lights [N_FLOORS][N_BUTTONS]bool
-var buttonSent [N_FLOORS][N_BUTTONS]bool
 
 func ButtonInterface(quitChan <-chan bool, extLightsChan <-chan [][]bool, setLightsChan <-chan OrderType, buttonPressesChan chan<- OrderType, allocateOrdersChan chan<- OrderType, initChan <-chan bool) {
 	<-initChan
@@ -18,7 +17,7 @@ func ButtonInterface(quitChan <-chan bool, extLightsChan <-chan [][]bool, setLig
 		//Get new button presses and send order up/to drive
 		for floor := 0; floor < N_FLOORS; floor++ {
 			for dir := 0; dir < 3; dir++ {
-				if ElevGetButtonSignal(floor, dir) == true && lights[floor][dir] == false && buttonSent[floor][dir] == false {
+				if ElevGetButtonSignal(floor, dir) == true && lights[floor][dir] == false {
 					var order OrderType
 					order.Floor = floor
 					order.Dir = dir
@@ -29,7 +28,6 @@ func ButtonInterface(quitChan <-chan bool, extLightsChan <-chan [][]bool, setLig
 					} else {
 						buttonPressesChan <- order
 					}
-					buttonSent[floor][dir] = true
 				}
 			}
 		}
@@ -41,7 +39,6 @@ func ButtonInterface(quitChan <-chan bool, extLightsChan <-chan [][]bool, setLig
 					if lights[floor][dir] != extLights[floor][dir] {
 						ElevButtonLight(floor, dir, extLights[floor][dir])
 						lights[floor][dir] = extLights[floor][dir]
-						buttonSent[floor][dir] = false
 					}
 				}
 			}
@@ -54,7 +51,6 @@ func ButtonInterface(quitChan <-chan bool, extLightsChan <-chan [][]bool, setLig
 			case order := <-setLightsChan:
 				ElevButtonLight(order.Floor, order.Dir, order.New)
 				lights[order.Floor][order.Dir] = order.New
-				buttonSent[order.Floor][order.Dir] = false
 			default:
 				ordersInChannel = false
 			}
