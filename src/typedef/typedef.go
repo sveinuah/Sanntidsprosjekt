@@ -45,8 +45,6 @@ type UnitType struct {
 type AckType struct { //Jeg vil at du skal ha denne i nettwork Interface --Schwung
 	To   string
 	From string
-	Type string
-	ID   int
 }
 
 // ElevError is cool!

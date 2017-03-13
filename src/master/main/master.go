@@ -92,6 +92,99 @@ func main() {
 	}
 }
 
+// passive updates unit list
+// It starts the passive routine in the network interface.
+// It terminates them when something is received on the quit channel.
+func passive(sync chan [][]typedef.MasterOrder, quitChan chan bool) {
+	unitChan := make(chan typedef.UnitUpdate, 1)
+	subQuit := make(chan bool)
+
+	masternetworkinterface.Passive(sync, unitChan, quitChan)
+
+	for {
+		select {
+		case update := <-unitChan:
+			unitMutex.Lock()
+			units = update
+			unitMutex.Unlock()
+			fmt.Println("Got Units", units)
+		case <-quitChan:
+			close(subQuit)
+			fmt.Println("Aborting passive go-goutine")
+			return
+		}
+	}
+}
+
+// active updates unit list, requests and handles received reports
+// It starts the active routine in the network interface, and the order handling go-routine.
+// It terminates when something is received on the quit channel.
+func active(sync chan [][]typedef.MasterOrder, done chan bool, quitChan chan bool) {
+
+	fmt.Println("Orderhandling started!")
+	var externalLights = make([][]bool, numFloors, numFloors)
+	for i := range externalLights {
+		externalLights[i] = make([]bool, 2, 2)
+	}
+
+	elevReports := make(map[string]typedef.StatusType)
+
+	statusChan := make(chan typedef.StatusType, 10)
+	unitChan := make(chan typedef.UnitUpdate, 10)
+	orderRx := make(chan typedef.OrderType, 100)
+	orderTx := make(chan typedef.OrderType, 100)
+	lightChan := make(chan [][]bool, 1)
+	subQuit := make(chan bool)
+
+	reportAccess := make(chan bool, 1)
+	reportAccess <- true
+
+	masternetworkinterface.Active(unitChan, orderTx, orderRx, sync, statusChan, lightChan, quitChan)
+
+	//go orders(elevReports, reportAccess, orderRx, orderTx, lightChan, subQuit, ordersDone)
+
+	for {
+		select {
+		case update := <-unitChan:
+			unitMutex.Lock()
+			units = update
+			unitMutex.Unlock()
+			fmt.Println("Got Units", units)
+		case report := <-statusChan:
+			//fmt.Println("Got report")
+			<-reportAccess
+			elevReports[report.From] = report
+			reportAccess <- true
+		case <-quitChan:
+			close(subQuit)
+			fmt.Println("aborting active routine")
+			return
+		case order := <-orderRx:
+			handleReceivedOrder(order, externalLights)
+			lightChan <- externalLights
+			fmt.Println("Order:", order)
+		default:
+			for i := range orderList {
+				for j, order := range orderList[i] {
+					diff := time.Now().Sub(order.Estimated)
+					if order.Order.To == "" && order.Order.From != "" || (int(diff) > 0 && !order.Estimated.IsZero()) {
+						to, estim := findSuitedSlave(elevReports, reportAccess, order) // 2 sek pr etasje + 2 sek pr stop + leeway
+						if to != id {
+							fmt.Println("To:", to)
+							orderList[i][j].Order.To = to
+							orderList[i][j].Order.From = id
+							orderList[i][j].Estimated = estim
+							orderTx <- orderList[i][j].Order
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+// Help functions below  :)
+
 // initialize uses the network interface to find other Masters/Slaves and get synchronization data.
 // terminates initiated go-routines after it is finished.
 func initialize() {
@@ -135,124 +228,6 @@ func initialize() {
 	fmt.Println("Done Initializing Master!")
 }
 
-// passive updates unit list
-// It starts the passive routine in the network interface.
-// It terminates them when something is received on the quit channel.
-func passive(sync chan [][]typedef.MasterOrder, quitChan chan bool) {
-	unitChan := make(chan typedef.UnitUpdate, 1)
-	subQuit := make(chan bool)
-
-	masternetworkinterface.Passive(sync, unitChan, quitChan)
-
-	for {
-		select {
-		case update := <-unitChan:
-			unitMutex.Lock()
-			units = update
-			unitMutex.Unlock()
-			fmt.Println("Got Units", units)
-		case <-quitChan:
-			close(subQuit)
-			fmt.Println("Aborting passive go-goutine")
-			return
-		}
-	}
-}
-
-// active updates unit list, requests and handles received reports
-// It starts the active routine in the network interface, and the order handling go-routine.
-// It terminates when something is received on the quit channel.
-func active(sync chan [][]typedef.MasterOrder, done chan bool, quitChan chan bool) {
-	reportNum := 1
-
-	elevReports := make(map[string]typedef.StatusType)
-
-	statusReqChan := make(chan int, 1) //to request reports with id
-	statusChan := make(chan typedef.StatusType, 10)
-	unitChan := make(chan typedef.UnitUpdate, 10)
-	orderRx := make(chan typedef.OrderType, 100)
-	orderTx := make(chan typedef.OrderType, 100)
-	lightChan := make(chan [][]bool, 1)
-	subQuit := make(chan bool)
-
-	reportAccess := make(chan bool, 1)
-	ordersDone := make(chan bool)
-	reportAccess <- true
-
-	masternetworkinterface.Active(unitChan, orderTx, orderRx, sync, statusChan, statusReqChan, lightChan, quitChan)
-
-	go orders(elevReports, reportAccess, orderRx, orderTx, lightChan, subQuit, ordersDone)
-
-	reportTime := time.Tick(reportInterval * time.Second)
-
-	for {
-		select {
-		case update := <-unitChan:
-			unitMutex.Lock()
-			units = update
-			unitMutex.Unlock()
-			fmt.Println("Got Units", units)
-		case report := <-statusChan:
-			//fmt.Println("Got report")
-			<-reportAccess
-			elevReports[report.From] = report
-			reportAccess <- true
-		case <-reportTime:
-			//fmt.Println("Request report!")
-			reportNum++
-			statusReqChan <- reportNum
-		//case <-errChan:
-		//handleErr
-		case <-quitChan:
-			close(subQuit)
-			<-ordersDone
-			done <- true
-			fmt.Println("aborting active routine")
-			return
-		default:
-		}
-	}
-}
-
-// orders handles all incoming orders, as well as delegating them to the slaves.
-// It is made to run as a go-routine.
-// It terminates when something is received on the quit channel.
-func orders(reports map[string]typedef.StatusType, reportAccess chan bool, orderRx chan typedef.OrderType, orderTx chan typedef.OrderType, lightChan chan [][]bool, quitChan chan bool, done chan<- bool) {
-	fmt.Println("Orderhandling started!")
-	var externalLights = make([][]bool, numFloors, numFloors)
-	for i := range externalLights {
-		externalLights[i] = make([]bool, 2, 2)
-	}
-	for {
-		select {
-		case order := <-orderRx:
-			handleNewOrder(order, externalLights)
-			lightChan <- externalLights
-			fmt.Println("Order:", order)
-		case <-quitChan:
-			done <- true
-			fmt.Println("go orders aborting")
-			return
-		default:
-			for i := range orderList {
-				for j, order := range orderList[i] {
-					diff := time.Now().Sub(order.Estimated)
-					if order.Order.To == "" && order.Order.From != "" || (int(diff) > 0 && !order.Estimated.IsZero()) {
-						to, estim := findAppropriate(reports, reportAccess, order) // 2 sek pr etasje + 2 sek pr stop + leeway
-						if to != id {
-							fmt.Println("To:", to)
-							orderList[i][j].Order.To = to
-							orderList[i][j].Order.From = id
-							orderList[i][j].Estimated = estim
-							orderTx <- orderList[i][j].Order
-						}
-					}
-				}
-			}
-		}
-	}
-}
-
 func getState(lastState int) int {
 	// get and return stateQuit when quit flag is raised NYI
 	if checkIfActive() {
@@ -283,12 +258,13 @@ func checkIfActive() bool {
 // handleOrders adds all new orders sent to "", to the order list.
 // receiving a false order, means that it is executed by an elevator.
 // This function writes to the global orderList and the given Light matrix.
-func handleNewOrder(o typedef.OrderType, lights [][]bool) {
+func handleReceivedOrder(o typedef.OrderType, lights [][]bool) {
 	if o.New {
-		if orderList[o.Floor][o.Dir].Order.To == "" {
-			orderList[o.Floor][o.Dir] = typedef.MasterOrder{Order: o}
-			(lights)[o.Floor][o.Dir] = true
+		if orderList[o.Floor][o.Dir].Order.From == id && o.From != id {
+			return
 		}
+		orderList[o.Floor][o.Dir] = typedef.MasterOrder{Order: o}
+		lights[o.Floor][o.Dir] = true
 		return
 	}
 	orderList[o.Floor][o.Dir] = typedef.MasterOrder{} //clear order
@@ -298,19 +274,13 @@ func handleNewOrder(o typedef.OrderType, lights [][]bool) {
 // findAppropriate provides a cost function to find which slave is best suited for the order
 // It calculates an estimate for when the order should be finished.
 // This function reads from global values.
-func findAppropriate(reports map[string]typedef.StatusType, reportAccess chan bool, o typedef.MasterOrder) (string, time.Time) {
+func findSuitedSlave(reports map[string]typedef.StatusType, reportAccess chan bool, o typedef.MasterOrder) (string, time.Time) {
 	cost := 10000 //high number
 	chosenUnit := id
 
 	unitMutex.Lock()
 	defer unitMutex.Unlock()
 	for _, unit := range units.Peers {
-		/*For testing purposes--------------------------
-		if unit.Type == typedef.SLAVE {
-			return unit.ID, time.Now().Add(10 * time.Second)
-		}
-		//----------------------------------------------*/
-		//ACTUAL ALGORITHM
 		<-reportAccess
 		report := reports[unit.ID]
 		reportAccess <- true
@@ -445,7 +415,6 @@ func findAppropriate(reports map[string]typedef.StatusType, reportAccess chan bo
 			}
 		}
 	}
-	//return id, time.Time{} //bounce back to myself
 	cost += estimateBuffer
 	return chosenUnit, time.Now().Add(time.Duration(cost) * time.Second) //This should be returned
 }
