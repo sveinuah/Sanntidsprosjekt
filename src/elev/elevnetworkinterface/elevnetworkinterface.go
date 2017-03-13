@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"networkmodule/bcast"
 	"networkmodule/peers"
+	"sync"
 	"time"
 	. "typedef"
 )
@@ -25,6 +26,7 @@ const RxPort = 30014
 const peersComPort = 40014
 
 var CONNECTED = true
+var cMutex = &sync.Mutex{}
 
 func Start(id string, quitChan chan bool, allocateOrdersChan chan OrderType, executedOrdersChan chan OrderType, extLightsChan chan [][]bool, setLightsChan chan OrderType, buttonPressesChan chan OrderType, elevStatusChan chan StatusType) {
 	fmt.Println("elevnet Init!")
@@ -67,25 +69,35 @@ func Start(id string, quitChan chan bool, allocateOrdersChan chan OrderType, exe
 }
 
 func disConnect() {
-	//fmt.Println("Disconnected")
+	fmt.Println("Disconnected")
+	cMutex.Lock()
 	CONNECTED = false
+	cMutex.Unlock()
 }
 
 func reConnect() {
-	//fmt.Println("Connected")
+	fmt.Println("Connected")
+	cMutex.Lock()
 	CONNECTED = true
+	cMutex.Unlock()
+}
+
+func connectStatus() bool {
+	cMutex.Lock()
+	defer cMutex.Unlock()
+	return CONNECTED
 }
 
 func resetTimers(timeoutTimer *time.Timer, resendTimer *time.Timer) {
 	if !timeoutTimer.Stop() {
 		<-timeoutTimer.C
-		fmt.Println("Reset Timeout")
+		//fmt.Println("Reset Timeout")
 	}
 	timeoutTimer.Reset(TIMOUT_TIME)
 
 	if !resendTimer.Stop() {
 		<-resendTimer.C
-		fmt.Println("Reset Resend")
+		//fmt.Println("Reset Resend")
 	}
 	resendTimer.Reset(RESEND_TIME)
 }
@@ -98,17 +110,23 @@ func receiveAck(AckRxChan chan AckType, statusReqRxChan chan int, statusAckRxCha
 			fmt.Println("quitting ack")
 			return
 		case AckRec = <-AckRxChan:
+			//fmt.Println("Got Ack!", AckRec.To, AckRec.ID, AckRec.Type)
 			if AckRec.Type == "Status" && AckRec.To == "" {
 				statusReqRxChan <- AckRec.ID
-				reConnect()
-				fmt.Println("Receieved Status Req")
+				//fmt.Println("Got Status Request")
+				if !connectStatus() {
+					reConnect()
+				}
+
+				//fmt.Println("Receieved Status Req")
 			}
 			if AckRec.To == name {
 
 				switch AckRec.Type {
+				//Jørgen WTF????!!!
 				case "Status":
 					statusAckRxChan <- AckRec.ID
-					fmt.Println("Acknowledge Rec Status")
+				//fmt.Println("Acknowledge Rec Status")
 				case "ButtonPress":
 					buttonAckRxChan <- true
 				case "ExecOrder":
@@ -137,10 +155,11 @@ func answerStatusCall(statusTxChan chan StatusType, statusReqRxChan chan int, el
 			sending = true
 
 			// Get current status
-			fmt.Println("Fetching Status")
+			//fmt.Println("Fetching Status")
 
 			status = <-elevStatusChan
 
+			//fmt.Println("Sending Status")
 			//Add name to status
 			status.From = name
 
@@ -148,13 +167,15 @@ func answerStatusCall(statusTxChan chan StatusType, statusReqRxChan chan int, el
 			status.ID = statusReq
 
 			// Move current status into transmit channel
-			fmt.Println("Sending Status")
+			//fmt.Println("Sending Status")
 			statusTxChan <- status
 
 			// While we wait for acknowledge from Master:
 
 			timeoutTimer := time.NewTimer(TIMOUT_TIME)
 			resendTimer := time.NewTimer(RESEND_TIME)
+
+			resetTimers(timeoutTimer, resendTimer)
 
 			for sending {
 
@@ -194,12 +215,11 @@ func transmitButtonPress(buttonPressChan chan OrderType, buttonPressTxChan chan 
 		case <-quitChan:
 			return
 		case buttonPress = <-buttonPressChan:
-			fmt.Println("New ButtonPress")
-			//fmt.Println("Button Pressed")
+			//fmt.Println("New ButtonPress")
 
 			sending = true
 
-			if !CONNECTED {
+			if !connectStatus() {
 				if INDEPENDENT {
 					allocateOrdersChan <- buttonPress
 					setLightsChan <- buttonPress
@@ -256,21 +276,20 @@ func transmitExecOrders(executedOrdersChan chan OrderType, executedOrdersTxChan 
 	for {
 
 		select {
-
 		case <-quitChan:
 			return
 		case executedOrder = <-executedOrdersChan:
-
 			sending = true
 
-			if !CONNECTED {
+			if !connectStatus() {
 				sending = false
 				break
 			}
 
+			executedOrder.To = ""
 			executedOrder.From = name
 
-			fmt.Println("Executed Order:", executedOrder)
+			//fmt.Println("Executed Order:", executedOrder)
 
 			// Move current button press into transmit channe
 			executedOrdersTxChan <- executedOrder

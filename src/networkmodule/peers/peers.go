@@ -14,27 +14,28 @@ type PeerUpdate struct {
 	Lost  []string
 }
 
-const interval = 15 * time.Millisecond
-const timeout = 4000 * time.Millisecond
+const interval = 200 * time.Millisecond
+const timeout = 500 * time.Millisecond
 
 func Transmitter(port int, id string, quitChan chan bool) {
-
+	fmt.Println("Starting Peer Transmitter")
 	conn := conn.DialBroadcastUDP(port)
 	addr, _ := net.ResolveUDPAddr("udp4", fmt.Sprintf("255.255.255.255:%d", port))
+	t := time.Tick(interval)
 
 	for {
 		select {
 		case <-quitChan:
+			fmt.Println("Quitting peer transmitter!")
 			return
-		case <-time.After(interval):
+		case <-t:
 			conn.WriteTo([]byte(id), addr)
-		default:
 		}
 	}
 }
 
 func Receiver(port int, peerUpdateCh chan<- PeerUpdate, quitChan chan bool) {
-
+	fmt.Println("Starting Peer Receiver!")
 	var buf [1024]byte
 	var p PeerUpdate
 	lastSeen := make(map[string]time.Time)
@@ -44,6 +45,7 @@ func Receiver(port int, peerUpdateCh chan<- PeerUpdate, quitChan chan bool) {
 	for {
 		select {
 		case <-quitChan:
+			fmt.Println("Quitting peer receiver!")
 			return
 		default:
 			updated := false

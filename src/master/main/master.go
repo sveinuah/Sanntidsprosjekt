@@ -3,12 +3,12 @@ package main
 import (
 	"flag"
 	"fmt"
-//	"master/masternetworkinterface"
-	"master/testmaster"
+	"master/masternetworkinterface"
+	//"master/testmaster"
+	"runtime"
+	"sync"
 	"time"
 	"typedef"
-	"sync"
-	"runtime"
 )
 
 const (
@@ -34,7 +34,6 @@ var units typedef.UnitUpdate
 var orderList [][]typedef.MasterOrder
 
 var unitMutex = &sync.Mutex{}
-
 
 func main() {
 	initialize()
@@ -62,7 +61,7 @@ func main() {
 		switch state {
 		case stateGoPassive:
 			quitChan <- true
-			<- doneChan
+			<-doneChan
 			go passive(syncChan, quitChan)
 			fmt.Println("Going passive")
 			fallthrough
@@ -74,7 +73,6 @@ func main() {
 			lastState = statePassive
 		case stateGoActive:
 			quitChan <- true
-			time.Sleep(100 * time.Millisecond)
 			go active(syncChan, doneChan, quitChan)
 			fmt.Println("Going Active")
 			fallthrough
@@ -101,20 +99,18 @@ func initialize() {
 	flag.Parse()
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	
-	fmt.Println(id)
+
+	fmt.Println("My ID:", id)
 
 	fmt.Println("Master Initializing!")
-	fmt.Println(typedef.MasterOrder{})
-	fmt.Println(typedef.OrderType{})
 
 	quitChan := make(chan bool)
-	syncChan := make(chan [][]typedef.MasterOrder)
-	unitChan := make(chan typedef.UnitUpdate)
+	syncChan := make(chan [][]typedef.MasterOrder, 5)
+	unitChan := make(chan typedef.UnitUpdate, 5)
 
-	numFloors = test.Init(id, syncChan, unitChan, quitChan)//masternetworkinterface.Init(id, syncChan, unitChan, quitChan)
+	numFloors = masternetworkinterface.Init_MNI(id, syncChan, unitChan, quitChan)
 
-	fmt.Print("Got ", numFloors, " Floors")
+	fmt.Println("Got", numFloors, "Floors")
 
 	orderList = make([][]typedef.MasterOrder, numFloors, numFloors)
 	for i := range orderList {
@@ -135,7 +131,7 @@ func initialize() {
 	}
 
 	close(quitChan)
-	time.Sleep(100*time.Millisecond)
+	time.Sleep(1000 * time.Millisecond)
 	fmt.Println("Done Initializing Master!")
 }
 
@@ -146,7 +142,7 @@ func passive(sync chan [][]typedef.MasterOrder, quitChan chan bool) {
 	unitChan := make(chan typedef.UnitUpdate, 1)
 	subQuit := make(chan bool)
 
-	test.Passive(sync, unitChan, subQuit)//masternetworkinterface.Passive(sync, unitChan, quitChan)
+	masternetworkinterface.Passive(sync, unitChan, quitChan)
 
 	for {
 		select {
@@ -173,7 +169,7 @@ func active(sync chan [][]typedef.MasterOrder, done chan bool, quitChan chan boo
 
 	statusReqChan := make(chan int, 1) //to request reports with id
 	statusChan := make(chan typedef.StatusType, 10)
-	unitChan := make(chan typedef.UnitUpdate, 1)
+	unitChan := make(chan typedef.UnitUpdate, 10)
 	orderRx := make(chan typedef.OrderType, 100)
 	orderTx := make(chan typedef.OrderType, 100)
 	lightChan := make(chan [][]bool, 1)
@@ -183,7 +179,7 @@ func active(sync chan [][]typedef.MasterOrder, done chan bool, quitChan chan boo
 	ordersDone := make(chan bool)
 	reportAccess <- true
 
-	test.Active(unitChan, orderTx, orderRx, sync, statusChan, statusReqChan, lightChan, subQuit)//masternetworkinterface.Active(unitChan, orderTx, orderRx, sync, statusChan, statusReqChan, lightChan, quitChan)
+	masternetworkinterface.Active(unitChan, orderTx, orderRx, sync, statusChan, statusReqChan, lightChan, quitChan)
 
 	go orders(elevReports, reportAccess, orderRx, orderTx, lightChan, subQuit, ordersDone)
 
@@ -197,19 +193,19 @@ func active(sync chan [][]typedef.MasterOrder, done chan bool, quitChan chan boo
 			unitMutex.Unlock()
 			fmt.Println("Got Units", units)
 		case report := <-statusChan:
-			fmt.Println("Got report", report)
-			<- reportAccess
+			//fmt.Println("Got report")
+			<-reportAccess
 			elevReports[report.From] = report
 			reportAccess <- true
 		case <-reportTime:
-			fmt.Println("Request report!")
+			//fmt.Println("Request report!")
 			reportNum++
 			statusReqChan <- reportNum
 		//case <-errChan:
 		//handleErr
 		case <-quitChan:
 			close(subQuit)
-			<- ordersDone
+			<-ordersDone
 			done <- true
 			fmt.Println("aborting active routine")
 			return
@@ -222,6 +218,7 @@ func active(sync chan [][]typedef.MasterOrder, done chan bool, quitChan chan boo
 // It is made to run as a go-routine.
 // It terminates when something is received on the quit channel.
 func orders(reports map[string]typedef.StatusType, reportAccess chan bool, orderRx chan typedef.OrderType, orderTx chan typedef.OrderType, lightChan chan [][]bool, quitChan chan bool, done chan<- bool) {
+	fmt.Println("Orderhandling started!")
 	var externalLights = make([][]bool, numFloors, numFloors)
 	for i := range externalLights {
 		externalLights[i] = make([]bool, 2, 2)
@@ -229,9 +226,9 @@ func orders(reports map[string]typedef.StatusType, reportAccess chan bool, order
 	for {
 		select {
 		case order := <-orderRx:
-			handleNewOrder(order, &externalLights)
+			handleNewOrder(order, externalLights)
 			lightChan <- externalLights
-			//fmt.Println("Order:", order)
+			fmt.Println("Order:", order)
 		case <-quitChan:
 			done <- true
 			fmt.Println("go orders aborting")
@@ -240,16 +237,14 @@ func orders(reports map[string]typedef.StatusType, reportAccess chan bool, order
 			for i := range orderList {
 				for j, order := range orderList[i] {
 					diff := time.Now().Sub(order.Estimated)
-					if order.Order.To == id || (int(diff) > 0 && !order.Estimated.IsZero()) {
+					if order.Order.To == "" && order.Order.From != "" || (int(diff) > 0 && !order.Estimated.IsZero()) {
 						to, estim := findAppropriate(reports, reportAccess, order) // 2 sek pr etasje + 2 sek pr stop + leeway
-						
 						if to != id {
+							fmt.Println("To:", to)
 							orderList[i][j].Order.To = to
 							orderList[i][j].Order.From = id
 							orderList[i][j].Estimated = estim
 							orderTx <- orderList[i][j].Order
-						} else {
-							orderLst[i][j].Order.To = id
 						}
 					}
 				}
@@ -277,7 +272,7 @@ func checkIfActive() bool {
 	defer unitMutex.Unlock()
 	for _, unit := range units.Peers {
 		if unit.Type == typedef.MASTER {
-			if id > unit.ID {
+			if id > unit.ID && unit.ID != id {
 				return false
 			}
 		}
@@ -288,16 +283,16 @@ func checkIfActive() bool {
 // handleOrders adds all new orders sent to "", to the order list.
 // receiving a false order, means that it is executed by an elevator.
 // This function writes to the global orderList and the given Light matrix.
-func handleNewOrder(o typedef.OrderType, lights *[][]bool) {
+func handleNewOrder(o typedef.OrderType, lights [][]bool) {
 	if o.New {
 		if orderList[o.Floor][o.Dir].Order.To == "" {
 			orderList[o.Floor][o.Dir] = typedef.MasterOrder{Order: o}
-			(*lights)[o.Floor][o.Dir] = true
+			(lights)[o.Floor][o.Dir] = true
 		}
 		return
 	}
 	orderList[o.Floor][o.Dir] = typedef.MasterOrder{} //clear order
-	(*lights)[o.Floor][o.Dir] = false
+	(lights)[o.Floor][o.Dir] = false
 }
 
 // findAppropriate provides a cost function to find which slave is best suited for the order
@@ -308,15 +303,15 @@ func findAppropriate(reports map[string]typedef.StatusType, reportAccess chan bo
 	chosenUnit := id
 
 	unitMutex.Lock()
+	defer unitMutex.Unlock()
 	for _, unit := range units.Peers {
-		unitMutex.Unlock()
 		/*For testing purposes--------------------------
 		if unit.Type == typedef.SLAVE {
 			return unit.ID, time.Now().Add(10 * time.Second)
 		}
 		//----------------------------------------------*/
 		//ACTUAL ALGORITHM
-		<- reportAccess
+		<-reportAccess
 		report := reports[unit.ID]
 		reportAccess <- true
 
@@ -328,7 +323,7 @@ func findAppropriate(reports map[string]typedef.StatusType, reportAccess chan bo
 
 			if report.Running && report.CurrentFloor == o.Order.Floor {
 				if report.Direction == typedef.DIR_UP {
-					if report.CurrentFloor < numFloors - 1 {
+					if report.CurrentFloor < numFloors-1 {
 						report.CurrentFloor++
 					}
 				}
@@ -344,22 +339,22 @@ func findAppropriate(reports map[string]typedef.StatusType, reportAccess chan bo
 				}
 
 				lowestFloor := report.CurrentFloor
-				for i:= report.CurrentFloor; i > -1; i-- {
+				for i := report.CurrentFloor; i > -1; i-- {
 					switch {
-						case report.MyOrders[i][typedef.DIR_DOWN] == true:
-							fallthrough
-						case report.MyOrders[i][typedef.DIR_NODIR] == true:
-							stops++
-							lowestFloor = i
+					case report.MyOrders[i][typedef.DIR_DOWN] == true:
+						fallthrough
+					case report.MyOrders[i][typedef.DIR_NODIR] == true:
+						stops++
+						lowestFloor = i
 					}
 				}
 
 				for i := lowestFloor; i < o.Order.Floor; i++ {
 					switch {
-						case report.MyOrders[i][typedef.DIR_UP] == true:
-							fallthrough
-						case report.MyOrders[i][typedef.DIR_NODIR] == true:
-							stops++
+					case report.MyOrders[i][typedef.DIR_UP] == true:
+						fallthrough
+					case report.MyOrders[i][typedef.DIR_NODIR] == true:
+						stops++
 					}
 				}
 
@@ -372,10 +367,10 @@ func findAppropriate(reports map[string]typedef.StatusType, reportAccess chan bo
 
 				for i := report.CurrentFloor; i < o.Order.Floor; i++ {
 					switch {
-						case report.MyOrders[i][typedef.DIR_UP] == true:
-							fallthrough
-						case report.MyOrders[i][typedef.DIR_NODIR] == true:
-							stops++
+					case report.MyOrders[i][typedef.DIR_UP] == true:
+						fallthrough
+					case report.MyOrders[i][typedef.DIR_NODIR] == true:
+						stops++
 					}
 				}
 
@@ -388,10 +383,10 @@ func findAppropriate(reports map[string]typedef.StatusType, reportAccess chan bo
 
 				for i := o.Order.Floor; i < report.CurrentFloor; i++ {
 					switch {
-						case report.MyOrders[i][typedef.DIR_DOWN] == true:
-							fallthrough
-						case report.MyOrders[i][typedef.DIR_NODIR] == true:
-							stops++
+					case report.MyOrders[i][typedef.DIR_DOWN] == true:
+						fallthrough
+					case report.MyOrders[i][typedef.DIR_NODIR] == true:
+						stops++
 					}
 				}
 
@@ -404,22 +399,22 @@ func findAppropriate(reports map[string]typedef.StatusType, reportAccess chan bo
 				}
 
 				highestFloor := report.CurrentFloor
-				for i:= report.CurrentFloor; i < numFloors + 1; i++ {
+				for i := report.CurrentFloor; i < numFloors; i++ {
 					switch {
-						case report.MyOrders[i][typedef.DIR_UP] == true:
-							fallthrough
-						case report.MyOrders[i][typedef.DIR_NODIR] == true:
-							stops++
-							highestFloor = i
+					case report.MyOrders[i][typedef.DIR_UP] == true:
+						fallthrough
+					case report.MyOrders[i][typedef.DIR_NODIR] == true:
+						stops++
+						highestFloor = i
 					}
 				}
 
 				for i := highestFloor; i > o.Order.Floor; i-- {
 					switch {
-						case report.MyOrders[i][typedef.DIR_DOWN] == true:
-							fallthrough
-						case report.MyOrders[i][typedef.DIR_NODIR] == true:
-							stops++
+					case report.MyOrders[i][typedef.DIR_DOWN] == true:
+						fallthrough
+					case report.MyOrders[i][typedef.DIR_NODIR] == true:
+						stops++
 					}
 				}
 
@@ -449,9 +444,7 @@ func findAppropriate(reports map[string]typedef.StatusType, reportAccess chan bo
 				cost = tempCost
 			}
 		}
-		unitMutex.Lock()
 	}
-	unitMutex.Unlock()
 	//return id, time.Time{} //bounce back to myself
 	cost += estimateBuffer
 	return chosenUnit, time.Now().Add(time.Duration(cost) * time.Second) //This should be returned

@@ -12,6 +12,11 @@ var (
 )
 
 func DummyHeis(quitChan chan bool, allocateOrdersChan chan OrderType, executedOrdersChan chan OrderType, extLightsChan chan [][]bool, setLightsChan chan OrderType, buttonPressesChan chan OrderType, elevStatusChan chan StatusType) {
+	oldLights = make([][]bool, 4, 4)
+	for i := range oldLights {
+		oldLights[i] = make([]bool, 2, 2)
+	}
+
 	status.CurrentFloor = 3
 	status.Direction = 0
 	status.Running = true
@@ -21,11 +26,12 @@ func DummyHeis(quitChan chan bool, allocateOrdersChan chan OrderType, executedOr
 	}
 	status.DoorOpen = false
 
-	//go makeOrders(buttonPressesChan)
+	go makeOrders(buttonPressesChan)
 
 	for {
 		select {
 		case newOrder := <-allocateOrdersChan:
+			fmt.Println("Got nrew Order!")
 			go handleOrder(newOrder, executedOrdersChan)
 		case newLights := <-extLightsChan:
 			getLights(newLights)
@@ -42,15 +48,14 @@ func DummyHeis(quitChan chan bool, allocateOrdersChan chan OrderType, executedOr
 }
 
 func handleOrder(order OrderType, executedOrdersChan chan OrderType) {
-	timer := time.After(4 * time.Second)
-	<-timer
+	time.Sleep(4 * time.Second)
 	order.New = false
 	executedOrdersChan <- order
 }
 
 func getLights(newLights [][]bool) {
-	for i := 0; i < 4; i++ {
-		for j := 0; j < 3; j++ {
+	for i := 0; i < len(newLights); i++ {
+		for j := 0; j < len(newLights[i]); j++ {
 			if newLights[i][j] != oldLights[i][j] {
 				fmt.Println(newLights)
 				oldLights = newLights

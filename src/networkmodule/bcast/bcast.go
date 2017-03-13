@@ -7,12 +7,13 @@ import (
 	"networkmodule/conn"
 	"reflect"
 	"strings"
+	"time"
 )
 
 // Encodes received values from `chans` into type-tagged JSON, then broadcasts
 // it on `port`
-func Transmitter(port int, quitChan chan bool, chans ...interface{}) {
-
+func Transmitter(port int, chans ...interface{}) {
+	fmt.Println("Starting Bcast Transmitter!")
 	checkArgs(chans...)
 
 	n := 0
@@ -33,20 +34,20 @@ func Transmitter(port int, quitChan chan bool, chans ...interface{}) {
 	conn := conn.DialBroadcastUDP(port)
 	addr, _ := net.ResolveUDPAddr("udp4", fmt.Sprintf("255.255.255.255:%d", port))
 	for {
-		select {
-		case <-quitChan:
+		chosen, value, open := reflect.Select(selectCases)
+		if !open {
+			fmt.Println("Quitting bcast Transmitter!")
 			return
-		default:
-			chosen, value, _ := reflect.Select(selectCases)
-			buf, _ := json.Marshal(value.Interface())
-			conn.WriteTo([]byte(typeNames[chosen]+string(buf)), addr)
 		}
+		buf, _ := json.Marshal(value.Interface())
+		conn.WriteTo([]byte(typeNames[chosen]+string(buf)), addr)
 	}
 }
 
 // Matches type-tagged JSON received on `port` to element types of `chans`, then
 // sends the decoded value on the corresponding channel
 func Receiver(port int, quitChan chan bool, chans ...interface{}) {
+	fmt.Println("Starting bcast Receiver!")
 	checkArgs(chans...)
 
 	var buf [1024]byte
@@ -54,9 +55,14 @@ func Receiver(port int, quitChan chan bool, chans ...interface{}) {
 	for {
 		select {
 		case <-quitChan:
+			fmt.Println("Quitting bcast Receiver!")
 			return
 		default:
-			n, _, _ := conn.ReadFrom(buf[0:])
+			conn.SetDeadline(time.Now().Add(100 * time.Millisecond))
+			n, _, err := conn.ReadFrom(buf[0:])
+			if err != nil {
+				break
+			}
 			for _, ch := range chans {
 				T := reflect.TypeOf(ch).Elem()
 				typeName := T.String()

@@ -1,6 +1,7 @@
 package testMNI
 
 import (
+	"fmt"
 	"networkmodule/bcast"
 	"networkmodule/peers"
 	"strings"
@@ -23,8 +24,8 @@ const (
 	peersComPort = 40014
 )
 
-func Init_tmni(statusReqChan chan int, statusChan chan StatusType, unitUpdateChan chan UnitUpdate, orderTxChan chan OrderType, orderRxChan chan OrderType, quitChan chan bool) {
-
+func Init_tmni(statusReqChan chan int, statusChan chan StatusType, unitUpdateChan chan UnitUpdate, orderTxChan chan OrderType, orderRxChan chan OrderType, lightsChan chan [][]bool, quitChan chan bool) {
+	fmt.Println("testMNI initializing!")
 	ackTxChan := make(chan AckType, 10)
 	statusRxChan := make(chan StatusType, 10)
 	peerUpdateChan := make(chan peers.PeerUpdate, 100)
@@ -32,9 +33,10 @@ func Init_tmni(statusReqChan chan int, statusChan chan StatusType, unitUpdateCha
 	newOrderTxChan := make(chan OrderType, 100)
 	ackRxChan := make(chan AckType, 100)
 	extOrderRxChan := make(chan OrderType, 100)
+	lightsTxChan := make(chan [][]bool, 10)
 
 	go peers.Receiver(peersComPort, peerUpdateChan, quitChan)
-	go bcast.Transmitter(txPort, quitChan, ackTxChan, newOrderTxChan)
+	go bcast.Transmitter(txPort, quitChan, ackTxChan, newOrderTxChan, lightsTxChan)
 	go bcast.Receiver(rxPort, quitChan, statusRxChan, extOrderRxChan, ackRxChan)
 
 	go requestAndReceiveStatus(statusChan, statusRxChan, statusReqChan, ackTxChan, quitChan)
@@ -42,6 +44,7 @@ func Init_tmni(statusReqChan chan int, statusChan chan StatusType, unitUpdateCha
 	go sendNewOrder(orderTxChan, newOrderTxChan, newOrderackRxChan, quitChan)
 	go receiveAckHandler(ackRxChan, newOrderackRxChan, quitChan)
 	go receiveOrder(extOrderRxChan, orderRxChan, ackTxChan, quitChan)
+	go broadcastExtLights(lightsChan, lightsTxChan, quitChan)
 }
 
 func receiveAckHandler(ackRxChan chan AckType, newOrderackRxChan chan bool, quitChan chan bool) {
@@ -184,6 +187,8 @@ func receiveOrder(extOrderRxChan chan OrderType, orderRx chan OrderType, ackTxCh
 		case <-quitChan:
 			return
 		case extOrder = <-extOrderRxChan:
+			//fmt.Println("Got Order:", extOrder)
+
 			if extOrder.To != "" {
 				break
 			}
@@ -196,9 +201,32 @@ func receiveOrder(extOrderRxChan chan OrderType, orderRx chan OrderType, ackTxCh
 			}
 
 			AckRec.To = extOrder.From
+
+			//fmt.Println("Ack Order", AckRec)
 			ackTxChan <- AckRec
 
 			orderRx <- extOrder
+		default:
+		}
+	}
+}
+
+func broadcastExtLights(lightsChan chan [][]bool, lightsTxChan chan [][]bool, quitChan chan bool) {
+
+	var lights [][]bool
+	t := time.Tick(10 * resendTime)
+
+	for {
+		select {
+		case <-quitChan:
+			return
+
+		case <-t:
+			if len(lights) > 0 {
+				lightsTxChan <- lights
+			}
+
+		case lights = <-lightsChan:
 		default:
 		}
 	}
