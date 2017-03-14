@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"master/masternetworkinterface"
+	"math/rand"
 	"runtime"
 	"sync"
 	"time"
@@ -273,6 +274,7 @@ func handleReceivedOrder(o typedef.OrderType, lights [][]bool) {
 // findAppropriate provides a cost function to find which slave is best suited for the order
 // It calculates an estimate for when the order should be finished.
 // This function reads from global values.
+
 func findSuitedSlave(o typedef.MasterOrder) (string, time.Time) {
 	cost := 10000 //high number
 	chosenUnit := id
@@ -287,139 +289,120 @@ func findSuitedSlave(o typedef.MasterOrder) (string, time.Time) {
 		reportMutex.Lock()
 		report := elevReports[unit.ID]
 		reportMutex.Unlock()
+		if unit.Type == typedef.MASTER || report.From == "" {
+			continue
+		}
+		if report.Running {
+			if report.CurrentFloor < numFloors-1 && report.Direction == typedef.DIR_UP {
+				report.CurrentFloor++
+			} else if report.CurrentFloor > 0 && report.Direction == typedef.DIR_DOWN {
+				report.CurrentFloor--
+			}
+		}
 
-		if unit.Type == typedef.SLAVE && report.From != "" {
-			tempCost := 0
-			floorChanges := 0
-			stops := 0
-			dirChanges := 0
+		tempCost := 0
+		floorChanges := 0
+		stops := 0
+		dirChanges := 0
 
-			if report.Running && report.CurrentFloor == o.Order.Floor {
-				if report.Direction == typedef.DIR_UP {
-					if report.CurrentFloor < numFloors-1 {
-						report.CurrentFloor++
-					}
-				}
-				if report.CurrentFloor > 0 {
-					report.CurrentFloor--
+		// Cost calculations below:
+		switch {
+		case report.Direction == typedef.DIR_NODIR:
+			floorChanges = abs(o.Order.Floor - report.CurrentFloor)
+
+		case o.Order.Floor > report.CurrentFloor && report.Direction == typedef.DIR_DOWN:
+			dirChanges = 1
+			if o.Order.Dir == typedef.DIR_DOWN {
+				dirChanges++
+			}
+			lowestFloor := report.CurrentFloor
+			for i := report.CurrentFloor; i > -1; i-- {
+				if report.MyOrders[i][typedef.DIR_DOWN] {
+					stops++
+					lowestFloor = i
 				}
 			}
 
-			if o.Order.Floor > report.CurrentFloor && report.Direction == typedef.DIR_DOWN {
+			for i := lowestFloor; i < o.Order.Floor; i++ {
+				switch {
+				case report.MyOrders[i][typedef.DIR_UP]:
+					fallthrough
+				case report.MyOrders[i][typedef.DIR_NODIR]:
+					stops++
+				}
+			}
+			floorChanges = (report.CurrentFloor - lowestFloor) + (o.Order.Floor - lowestFloor)
+
+		case o.Order.Floor > report.CurrentFloor && report.Direction == typedef.DIR_UP:
+			if o.Order.Dir == typedef.DIR_DOWN {
 				dirChanges = 1
-				if o.Order.Dir == typedef.DIR_DOWN {
-					dirChanges++
+			}
+			for i := report.CurrentFloor; i < o.Order.Floor; i++ {
+				switch {
+				case report.MyOrders[i][typedef.DIR_UP]:
+					fallthrough
+				case report.MyOrders[i][typedef.DIR_NODIR]:
+					stops++
 				}
+			}
 
-				lowestFloor := report.CurrentFloor
-				for i := report.CurrentFloor; i > -1; i-- {
-					switch {
-					case report.MyOrders[i][typedef.DIR_DOWN] == true:
-						fallthrough
-					case report.MyOrders[i][typedef.DIR_NODIR] == true:
-						stops++
-						lowestFloor = i
-					}
-				}
+			floorChanges = o.Order.Floor - report.CurrentFloor
 
-				for i := lowestFloor; i < o.Order.Floor; i++ {
-					switch {
-					case report.MyOrders[i][typedef.DIR_UP] == true:
-						fallthrough
-					case report.MyOrders[i][typedef.DIR_NODIR] == true:
-						stops++
-					}
-				}
-
-				floorChanges = (report.CurrentFloor - lowestFloor) + (o.Order.Floor - lowestFloor)
-
-			} else if o.Order.Floor > report.CurrentFloor && report.Direction == typedef.DIR_UP {
-				if o.Order.Dir == typedef.DIR_DOWN {
-					dirChanges = 1
-				}
-
-				for i := report.CurrentFloor; i < o.Order.Floor; i++ {
-					switch {
-					case report.MyOrders[i][typedef.DIR_UP] == true:
-						fallthrough
-					case report.MyOrders[i][typedef.DIR_NODIR] == true:
-						stops++
-					}
-				}
-
-				floorChanges = o.Order.Floor - report.CurrentFloor
-
-			} else if o.Order.Floor < report.CurrentFloor && report.Direction == typedef.DIR_DOWN {
-				if o.Order.Dir == typedef.DIR_UP {
-					dirChanges = 1
-				}
-
-				for i := o.Order.Floor; i < report.CurrentFloor; i++ {
-					switch {
-					case report.MyOrders[i][typedef.DIR_DOWN] == true:
-						fallthrough
-					case report.MyOrders[i][typedef.DIR_NODIR] == true:
-						stops++
-					}
-				}
-
-				floorChanges = report.CurrentFloor - o.Order.Floor
-
-			} else if o.Order.Floor < report.CurrentFloor && report.Direction == typedef.DIR_UP {
+		case o.Order.Floor < report.CurrentFloor && report.Direction == typedef.DIR_DOWN:
+			if o.Order.Dir == typedef.DIR_UP {
 				dirChanges = 1
-				if o.Order.Dir == typedef.DIR_UP {
-					dirChanges++
-				}
-
-				highestFloor := report.CurrentFloor
-				for i := report.CurrentFloor; i < numFloors; i++ {
-					switch {
-					case report.MyOrders[i][typedef.DIR_UP] == true:
-						fallthrough
-					case report.MyOrders[i][typedef.DIR_NODIR] == true:
-						stops++
-						highestFloor = i
-					}
-				}
-
-				for i := highestFloor; i > o.Order.Floor; i-- {
-					switch {
-					case report.MyOrders[i][typedef.DIR_DOWN] == true:
-						fallthrough
-					case report.MyOrders[i][typedef.DIR_NODIR] == true:
-						stops++
-					}
-				}
-
-				floorChanges = (highestFloor - report.CurrentFloor) + (highestFloor - o.Order.Floor)
-
-			} else {
-				if o.Order.Floor > report.CurrentFloor {
-					floorChanges = o.Order.Floor - report.CurrentFloor
-
-					if o.Order.Dir == typedef.DIR_DOWN {
-						dirChanges = 1
-					}
-				} else {
-					floorChanges = report.CurrentFloor - o.Order.Floor
-
-					if o.Order.Dir == typedef.DIR_UP {
-						dirChanges = 1
-					}
+			}
+			for i := o.Order.Floor; i < report.CurrentFloor; i++ {
+				switch {
+				case report.MyOrders[i][typedef.DIR_DOWN]:
+					fallthrough
+				case report.MyOrders[i][typedef.DIR_NODIR]:
+					stops++
 				}
 			}
-			tempCost += floorChangeCost * floorChanges
-			tempCost += stopCost * stops
-			tempCost += dirChangeCost * dirChanges
 
-			if tempCost < cost {
-				chosenUnit = unit.ID
-				cost = tempCost
+			floorChanges = report.CurrentFloor - o.Order.Floor
+
+		case o.Order.Floor < report.CurrentFloor && report.Direction == typedef.DIR_UP:
+			dirChanges = 1
+			if o.Order.Dir == typedef.DIR_UP {
+				dirChanges++
 			}
+
+			highestFloor := report.CurrentFloor
+			for i := report.CurrentFloor; i < numFloors; i++ {
+				if report.MyOrders[i][typedef.DIR_UP] {
+					stops++
+					highestFloor = i
+				}
+			}
+
+			for i := highestFloor; i > o.Order.Floor; i-- {
+				switch {
+				case report.MyOrders[i][typedef.DIR_DOWN]:
+					fallthrough
+				case report.MyOrders[i][typedef.DIR_NODIR]:
+					stops++
+				}
+			}
+
+			floorChanges = (highestFloor - report.CurrentFloor) + (highestFloor - o.Order.Floor)
+
+		default:
+		}
+		tempCost += floorChangeCost * floorChanges
+		tempCost += stopCost * stops
+		tempCost += dirChangeCost * dirChanges
+
+		if tempCost < cost {
+			chosenUnit = unit.ID
+			cost = tempCost
+		} else if tempCost == cost {
+			chosenUnit = chooseRandom(chosenUnit, unit.ID)
 		}
 	}
 	cost += estimateBuffer
-	return chosenUnit, time.Now().Add(time.Duration(cost) * time.Second) //This should be returned
+	return chosenUnit, time.Now().Add(time.Duration(cost) * time.Second)
 }
 
 func handleUnits(id string, newSlaveChan chan<- typedef.UnitType, quitChan chan bool) {
@@ -445,4 +428,16 @@ func handleUnits(id string, newSlaveChan chan<- typedef.UnitType, quitChan chan 
 			return
 		}
 	}
+}
+
+func abs(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
+}
+
+func chooseRandom(roger string, rud string) string {
+	arr := []string{roger, rud}
+	return arr[rand.Int()%2]
 }
