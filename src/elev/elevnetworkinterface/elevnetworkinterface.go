@@ -85,10 +85,6 @@ func transmitOrder(buttonPressChan chan OrderType, executedOrdersChan chan Order
 
 		order.From = id
 
-		/*for len(ackRx) > 0 {
-			fmt.Println(len(ackRx))
-			<-ackRx
-		}*/
 		orderTx <- order
 
 		timeout := time.After(TIMOUT_TIME)
