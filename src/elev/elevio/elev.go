@@ -18,6 +18,9 @@ var buttonLightMatrix [N_FLOORS][N_BUTTONS]int
 
 var buttonMatrix [N_FLOORS][N_BUTTONS]int
 
+// ElevInit Ititializes the hardware through io.go.
+// It will panic if the initialization of hardware is not successfull.
+// It returns the number of floors set by the global constant N_FLOORS.
 func ElevInit() int {
 	fmt.Println("Elev Initializing..")
 	buttonLightMatrix = [N_FLOORS][N_BUTTONS]int{
@@ -51,6 +54,9 @@ func ElevInit() int {
 	return N_FLOORS
 }
 
+// ElevMotorDirection sets the direction the motor is running.
+// The motor speed is set to the value of the global variablel motorSpeed.
+// providing the argument dir == 0 will stop the elevator.
 func ElevMotorDirection(dir int) {
 	if dir == DIR_NODIR {
 		IoWriteAnalog(MOTOR, DIR_NODIR)
@@ -63,6 +69,8 @@ func ElevMotorDirection(dir int) {
 	}
 }
 
+// ChangeMotorSpeed sets the global variable motorSpeed.
+// The speed is saturated at 0 and the global constant MAX_SPEED.
 func ChangeMotorSpeed(speed int) int {
 	if speed <= 0 {
 		return motorSpeed
@@ -77,9 +85,12 @@ func ChangeMotorSpeed(speed int) int {
 	}
 }
 
+// ElevButtonLight sets/clears the button light provided.
+// An error message is printed to standard logger if floor/button
+// is out of range.
 func ElevButtonLight(floor int, button int, val bool) {
 	if floor < 0 || button < 0 || floor >= N_FLOORS || button >= N_BUTTONS {
-		log.Fatal("floor/button out of range")
+		log.Println("floor/button out of range")
 	}
 
 	if val {
@@ -89,9 +100,11 @@ func ElevButtonLight(floor int, button int, val bool) {
 	}
 }
 
+// ElevFloorIndicator translates the argument floor to set the floor indicator lamp.
+// An error message is printed to standard logger if floor is out of range.
 func ElevFloorIndicator(floor int) {
 	if floor < 0 || floor >= N_FLOORS {
-		log.Fatal("floor out of range")
+		log.Println("floor out of range")
 	}
 
 	if (floor & 0x02) != 0 {
@@ -107,6 +120,7 @@ func ElevFloorIndicator(floor int) {
 	}
 }
 
+// ElevDoorOpenLight sets/clears the door open light.
 func ElevDoorOpenLight(val bool) {
 	if val {
 		IoSetBit(LIGHT_DOOR_OPEN)
@@ -115,6 +129,7 @@ func ElevDoorOpenLight(val bool) {
 	}
 }
 
+// ElevStopLight sets/clears the stop light.
 func ElevStopLight(val bool) {
 	if val {
 		IoSetBit(LIGHT_STOP)
@@ -123,13 +138,17 @@ func ElevStopLight(val bool) {
 	}
 }
 
+// EleGetButtonSignal provides an interface to the hardware to check if an order button is pushed.
+// An error message is printed to the standard logger if florr/button is out of range.
 func ElevGetButtonSignal(floor int, button int) bool {
 	if floor < 0 || button < 0 || floor >= N_FLOORS || button >= N_BUTTONS {
-		log.Fatal("floor/button out of range")
+		log.Println("floor/button out of range")
 	}
 	return IoReadBit(buttonMatrix[floor][button])
 }
 
+// ElevGetFloorSensorSignal reads the floor sensors and returns an int equal to the floor number.
+// If the elevator is between floors -1 is returned.
 func ElevGetFloorSensorSignal() int {
 	if IoReadBit(SENSOR_FLOOR1) {
 		return 0
