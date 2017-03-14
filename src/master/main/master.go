@@ -186,7 +186,6 @@ func active(sync chan [][]MasterOrder, newSlaveChan <-chan UnitType, done chan b
 							orderList[i][j].Order.From = id
 							orderList[i][j].Estimated = estim
 							orderTx <- orderList[i][j].Order
-
 						}
 					}
 				}
@@ -436,14 +435,14 @@ func findSuitedSlave(o MasterOrder) (string, time.Time) {
 	return chosenUnit, time.Now().Add(time.Duration(cost) * time.Second)
 }
 
+func chooseRandom(roger string, rud string) string {
+	arr := []string{roger, rud}
+	return arr[rand.Int()%2]
+}
+
 func abs(n int) int {
 	if n < 0 {
 		return -n
 	}
 	return n
-}
-
-func chooseRandom(roger string, rud string) string {
-	arr := []string{roger, rud}
-	return arr[rand.Int()%2]
 }

@@ -12,15 +12,16 @@ import (
 var id string
 
 const (
-	resendTime      = 20 * time.Millisecond
+	resendTime      = 40 * time.Millisecond
 	lightResendTime = 200 * time.Millisecond
-	timeOutTime     = 200 * time.Millisecond
+	timeOutTime     = 250 * time.Millisecond
 
 	rxPort       = 20014
 	txPort       = 30014
 	peersComPort = 40014
 )
 
+// Peers starts the go-routines reccesary for the masters peer updates.
 func Peers(identity string, unitUpdateChan chan UnitUpdate, quitChan chan bool) {
 
 	id = identity
@@ -43,6 +44,7 @@ func Init_MNI(masterBackupChan chan [][]MasterOrder, quitChan chan bool) int {
 	return len(status.MyOrders)
 }
 
+// Active starts the neccessary go routines for Active master mode
 func Active(masterOrderTx chan OrderType, masterOrderRx chan OrderType, masterBackupChan chan [][]MasterOrder, masterStatusRx chan StatusType, masterLightsTx chan [][]bool, quitChan chan bool) {
 
 	statusRx := make(chan StatusType, 100)
