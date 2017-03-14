@@ -14,32 +14,34 @@ const (
 	DOOR_OPEN_TIME     = 2 * time.Second
 )
 
+//Drive is responsible for running the elevator to service orders, including opening the door and toggling the floor indicator lamps.
 func Drive(quitChan <-chan bool, allocateOrdersChan <-chan OrderType, executedOrdersChan chan<- OrderType, elevStatusChan chan StatusType, setLightsChan chan<- OrderType, initChan chan<- bool) {
 	driveInit(initChan)
-	fmt.Println("Drive Initialized!!!")
+	fmt.Println("Drive Initialized!")
+
 	for {
 		getOrders(allocateOrdersChan)
-		//Check floor and see if elev should stop here, move in either direction or stay put
-		//Make neater
+
 		tempFloor := ElevGetFloorSensorSignal()
 		if tempFloor == BETWEEN_FLOORS {
 			if status.Running == false {
 				run(DIR_UP)
 			}
 		} else {
-			if status.CurrentFloor != tempFloor { //@NewFloor
+			if status.CurrentFloor != tempFloor {
 				ElevFloorIndicator(tempFloor)
 				status.CurrentFloor = tempFloor
 			}
+
 			if status.DoorOpen == false {
 				if checkIfStop() {
 					stopRoutine(executedOrdersChan, setLightsChan, allocateOrdersChan)
 				} else {
-					run(determineDirection())
+					run(determineNextDirection())
 				}
 			}
 		}
-		//Quit if told, update status struct if able
+
 		select {
 		case <-quitChan:
 			ElevMotorDirection(DIR_NODIR)
@@ -54,15 +56,20 @@ func Drive(quitChan <-chan bool, allocateOrdersChan <-chan OrderType, executedOr
 	}
 }
 
+//Initializes Elevio and reports this to ButtonInterface.
+//Runs the elevator up intil it reaches a floor, and fills in status struct.
 func driveInit(initChan chan<- bool) {
+
 	ElevInit()
 	initChan <- true
+
 	ElevMotorDirection(DIR_UP)
 	for ElevGetFloorSensorSignal() == BETWEEN_FLOORS {
 	}
 	status.CurrentFloor = ElevGetFloorSensorSignal()
 	ElevFloorIndicator(status.CurrentFloor)
 	ElevMotorDirection(DIR_NODIR)
+
 	status.Direction = DIR_NODIR
 	status.Running = false
 	status.MyOrders = make([][]bool, N_FLOORS, N_FLOORS)
@@ -80,16 +87,19 @@ func getOrders(allocateOrdersChan <-chan OrderType) {
 	}
 }
 
+//Handles everything related to stopping at a floor to let passengers on and off.
+//The door-open time is extended if a new order is received in the current floor, in a direction that is being serviced.
+//New orders in the current direction are prioritized when driving recommences.
 func stopRoutine(executedOrdersChan chan<- OrderType, setLightsChan chan<- OrderType, allocateOrdersChan <-chan OrderType) {
 	ElevMotorDirection(DIR_NODIR)
 	status.Running = false
 	ElevDoorOpenLight(true)
 	status.DoorOpen = true
-	status.Direction = determineDirection()
+	status.Direction = determineNextDirection()
 	clearOrder(executedOrdersChan, setLightsChan)
 
 	doorTimer := time.NewTimer(DOOR_OPEN_TIME)
-	//dirSet := false
+
 	for status.DoorOpen == true {
 		select {
 		case <-doorTimer.C:
@@ -110,13 +120,13 @@ func stopRoutine(executedOrdersChan chan<- OrderType, setLightsChan chan<- Order
 
 func checkIfStop() bool {
 	var relevantDirs []int
-	switch status.Direction { //Only clear orders if not continuing in this direction
+	switch status.Direction {
 	case DIR_UP:
 		relevantDirs = []int{DIR_UP, DIR_NODIR}
 	case DIR_DOWN:
 		relevantDirs = []int{DIR_DOWN, DIR_NODIR}
 	case DIR_NODIR:
-		relevantDirs = []int{DIR_NODIR} //DIR_UP, DIR_DOWN,
+		relevantDirs = []int{DIR_NODIR}
 	}
 	for dir := 0; dir < len(relevantDirs); dir++ {
 		if status.MyOrders[status.CurrentFloor][relevantDirs[dir]] == true {
@@ -142,7 +152,7 @@ func run(dir int) {
 	status.Direction = dir
 }
 
-func determineDirection() int {
+func determineNextDirection() int {
 	above := checkOrdersAbove(status.CurrentFloor)
 	below := checkOrdersBelow(status.CurrentFloor)
 	switch status.Direction {
@@ -200,9 +210,9 @@ func clearOrder(executedOrdersChan chan<- OrderType, setLightsChan chan<- OrderT
 	switch {
 	case status.Direction != DIR_NODIR:
 		executedOrdersChan <- clearOrder
-		status.MyOrders[status.CurrentFloor][status.Direction] = false //Clear status.MyOrders from list
+		status.MyOrders[status.CurrentFloor][status.Direction] = false
 
-		//If external order: Report to master and clear internal order aswell
+		//If order is external order: Report to master and clear internal order aswell
 		clearOrder.Dir = DIR_NODIR
 		fallthrough
 	default:

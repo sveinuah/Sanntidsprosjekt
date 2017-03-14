@@ -7,17 +7,16 @@ import (
 	. "typedef"
 )
 
-const (
-	DIR_INTERNAL = 2
-	SLEEP_TIME   = 100 * time.Millisecond
-)
+const SLEEP_TIME = 100 * time.Millisecond
 
 var lights [N_FLOORS][N_BUTTONS]bool
 
+//ButtonInterface collects all button presses, sets and clear button lights.
 func ButtonInterface(quitChan <-chan bool, extLightsChan <-chan [][]bool, setLightsChan <-chan OrderType, buttonPressesChan chan<- OrderType, allocateOrdersChan chan<- OrderType, initChan <-chan bool) {
-	<-initChan
+	<-initChan //Wait for Drive to initialize Elevio before starting
 	for {
-		//Get new button presses and send order up/to drive
+
+		//Get new button presses and send external orders to Master and internal orders to Drive. For internal orders, button lights are set immediately.
 		for floor := 0; floor < N_FLOORS; floor++ {
 			for dir := 0; dir < 3; dir++ {
 				if ElevGetButtonSignal(floor, dir) == true && lights[floor][dir] == false {
@@ -25,7 +24,7 @@ func ButtonInterface(quitChan <-chan bool, extLightsChan <-chan [][]bool, setLig
 					order.Floor = floor
 					order.Dir = dir
 					order.New = true
-					if order.Dir == DIR_INTERNAL {
+					if order.Dir == DIR_NODIR {
 						ElevButtonLight(order.Floor, order.Dir, order.New)
 						allocateOrdersChan <- order
 					} else {
@@ -34,7 +33,8 @@ func ButtonInterface(quitChan <-chan bool, extLightsChan <-chan [][]bool, setLig
 				}
 			}
 		}
-		//Copy extLights from master if new in channel, set/clear lights that are wrong
+
+		//Copy external lights from master if updted. Set/clear only lights that have changed
 		select {
 		case extLights := <-extLightsChan:
 			for floor := 0; floor < N_FLOORS; floor++ {
@@ -47,7 +47,8 @@ func ButtonInterface(quitChan <-chan bool, extLightsChan <-chan [][]bool, setLig
 			}
 		default:
 		}
-		//Get new orders and set/clear lights
+
+		//Get and execute orders to set or clear single lights
 		ordersInChannel := true
 		for ordersInChannel {
 			select {
@@ -60,7 +61,7 @@ func ButtonInterface(quitChan <-chan bool, extLightsChan <-chan [][]bool, setLig
 		}
 		select {
 		case <-quitChan:
-			fmt.Println("BI Abort!!!")
+			fmt.Println("Button Interface Abort!")
 			return
 		default:
 		}
