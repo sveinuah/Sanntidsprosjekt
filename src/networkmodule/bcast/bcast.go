@@ -13,7 +13,6 @@ import (
 // Encodes received values from `chans` into type-tagged JSON, then broadcasts
 // it on `port`
 func Transmitter(port int, chans ...interface{}) {
-	fmt.Println("Starting Bcast Transmitter!")
 	checkArgs(chans...)
 
 	n := 0
@@ -36,7 +35,6 @@ func Transmitter(port int, chans ...interface{}) {
 	for {
 		chosen, value, open := reflect.Select(selectCases)
 		if !open {
-			fmt.Println("Quitting bcast Transmitter!")
 			return
 		}
 		buf, _ := json.Marshal(value.Interface())
@@ -47,7 +45,6 @@ func Transmitter(port int, chans ...interface{}) {
 // Matches type-tagged JSON received on `port` to element types of `chans`, then
 // sends the decoded value on the corresponding channel
 func Receiver(port int, quitChan chan bool, chans ...interface{}) {
-	fmt.Println("Starting bcast Receiver!")
 	checkArgs(chans...)
 
 	var buf [1024]byte
@@ -55,7 +52,6 @@ func Receiver(port int, quitChan chan bool, chans ...interface{}) {
 	for {
 		select {
 		case <-quitChan:
-			fmt.Println("Quitting bcast Receiver!")
 			return
 		default:
 			conn.SetDeadline(time.Now().Add(100 * time.Millisecond))

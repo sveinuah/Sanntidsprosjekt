@@ -33,6 +33,7 @@ func Peers(identity string, unitUpdateChan chan UnitUpdate, quitChan chan bool) 
 }
 
 func Init_MNI(masterBackupChan chan [][]MasterOrder, quitChan chan bool) int {
+	fmt.Println("Network interface initializing..")
 
 	statusRx := make(chan StatusType, 10)
 
@@ -70,17 +71,15 @@ func Passive(masterBackupChan chan [][]MasterOrder, quitChan chan bool) {
 }
 
 func receiveStatus(masterStatusRx chan StatusType, statusRx chan StatusType, quitChan <-chan bool) {
-	fmt.Println("Starting receiveStatus!")
 	var lastID int
 
 	for {
 		select {
 		case <-quitChan:
-			fmt.Println("Quitting receiveStatus")
 			return
 
 		case status := <-statusRx:
-			if status.ID > lastID || status.ID == 0 {
+			if status.ID != lastID {
 				masterStatusRx <- status
 				lastID = status.ID
 			}
@@ -89,14 +88,12 @@ func receiveStatus(masterStatusRx chan StatusType, statusRx chan StatusType, qui
 }
 
 func translatePeerUpdates(peerUpdateChan chan peers.PeerUpdate, unitUpdateChan chan UnitUpdate, quitChan chan bool) {
-	fmt.Println("Starting translatePeerUpdates!")
 	var newPeerUpdate peers.PeerUpdate
 	var newUnitUpdate UnitUpdate
 	var newUnit UnitType
 	for {
 		select {
 		case <-quitChan:
-			fmt.Println("Quitting translatePeerUpdates!")
 			return
 		case newPeerUpdate = <-peerUpdateChan:
 			newUnitUpdate = UnitUpdate{}
@@ -127,14 +124,12 @@ func translatePeerUpdates(peerUpdateChan chan peers.PeerUpdate, unitUpdateChan c
 }
 
 func sendOrder(masterOrderTx chan OrderType, masterOrderRx chan OrderType, orderTx chan OrderType, ackRx chan AckType, quitChan chan bool) {
-	fmt.Println("Starting sendNewOrder!")
 	var order OrderType
 	var sending bool
 
 	for {
 		select {
 		case <-quitChan:
-			fmt.Println("Quitting sendNewOrder!")
 			return
 
 		case order = <-masterOrderTx:
@@ -179,13 +174,11 @@ func sendOrder(masterOrderTx chan OrderType, masterOrderRx chan OrderType, order
 }
 
 func receiveOrder(orderRx chan OrderType, masterOrderRx chan OrderType, ackTx chan AckType, quitChan chan bool) {
-	fmt.Println("Starting receiveOrder!")
 	var order OrderType
 	var ack AckType
 	for {
 		select {
 		case <-quitChan:
-			fmt.Println("Quitting receiveOrder!")
 			return
 		case order = <-orderRx:
 
@@ -203,14 +196,12 @@ func receiveOrder(orderRx chan OrderType, masterOrderRx chan OrderType, ackTx ch
 }
 
 func broadcastExtLights(masterLightsTx chan [][]bool, lightsTx chan [][]bool, quitChan chan bool) {
-	fmt.Println("Starting broadcastExtLights!")
 	var lights [][]bool
 	t := time.NewTicker(lightResendTime)
 
 	for {
 		select {
 		case <-quitChan:
-			fmt.Println("Quitting broadCastExtLigths!")
 			return
 		case <-t.C:
 			if len(lights) > 1 {
