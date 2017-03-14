@@ -101,6 +101,12 @@ func transmitOrder(buttonPressChan chan OrderType, executedOrdersChan chan Order
 				if ack.To == id {
 					sending = false
 				}
+				for len(ackRx) > 0 {
+					ack = <-ackRx
+					if ack.To == id && ack.From == order.To {
+						sending = false
+					}
+				}
 			case <-resend.C:
 				orderTx <- order
 			}

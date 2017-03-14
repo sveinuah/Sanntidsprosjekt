@@ -161,6 +161,14 @@ func sendOrder(masterOrderTx chan OrderType, masterOrderRx chan OrderType, order
 					if ack.To == id && ack.From == order.To {
 						sending = false
 					}
+
+					for len(ackRx) > 0 {
+						ack = <-ackRx
+						if ack.To == id && ack.From == order.To {
+							sending = false
+						}
+					}
+
 				case <-resend.C:
 					orderTx <- order
 				}
