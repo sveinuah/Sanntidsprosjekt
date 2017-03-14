@@ -9,9 +9,6 @@ import (
 	. "typedef"
 )
 
-//abortChan, allocateOrdersChan, executedOrdersChan, extLightsChan, extReportChan, elevStatusChan
-
-//Variables
 var id string
 
 const (
@@ -24,28 +21,28 @@ const (
 	peersComPort = 40014
 )
 
-func Init_MNI(ID string, masterBackupChan chan [][]MasterOrder, unitUpdateChan chan UnitUpdate, quitChan chan bool) int {
+func Peers(identity string, unitUpdateChan chan UnitUpdate, quitChan chan bool) {
 
-	id = ID
-
-	statusRx := make(chan StatusType, 10)
+	id = identity
 
 	peerUpdateChan := make(chan peers.PeerUpdate, 100)
 
+	go peers.Transmitter(peersComPort, id+":"+MASTER, quitChan)
 	go peers.Receiver(peersComPort, peerUpdateChan, quitChan)
-	go bcast.Receiver(rxPort, quitChan, statusRx)
-
 	go translatePeerUpdates(peerUpdateChan, unitUpdateChan, quitChan)
+}
 
-	fmt.Println("All goroutines are go!")
+func Init_MNI(masterBackupChan chan [][]MasterOrder, quitChan chan bool) int {
+
+	statusRx := make(chan StatusType, 10)
+
+	go bcast.Receiver(rxPort, quitChan, statusRx)
 
 	status := <-statusRx
 	return len(status.MyOrders)
 }
 
-func Active(unitUpdateChan chan UnitUpdate, masterOrderTx chan OrderType, masterOrderRx chan OrderType, masterBackupChan chan [][]MasterOrder, masterStatusRx chan StatusType, masterLightsTx chan [][]bool, quitChan chan bool) {
-
-	peerUpdateChan := make(chan peers.PeerUpdate, 100)
+func Active(masterOrderTx chan OrderType, masterOrderRx chan OrderType, masterBackupChan chan [][]MasterOrder, masterStatusRx chan StatusType, masterLightsTx chan [][]bool, quitChan chan bool) {
 
 	statusRx := make(chan StatusType, 100)
 	lightsTx := make(chan [][]bool, 100)
@@ -56,31 +53,20 @@ func Active(unitUpdateChan chan UnitUpdate, masterOrderTx chan OrderType, master
 	ackTx := make(chan AckType, 100)
 	ackRx := make(chan AckType, 100)
 
-	go peers.Transmitter(peersComPort, id+":"+MASTER, quitChan)
-	go peers.Receiver(peersComPort, peerUpdateChan, quitChan)
-
 	go bcast.Transmitter(txPort, quitChan, orderTx, masterBackupChan, lightsTx, ackTx)
 	go bcast.Receiver(rxPort, quitChan, statusRx, orderRx, ackRx)
 
 	go receiveStatus(masterStatusRx, statusRx, quitChan)
 	go sendOrder(masterOrderTx, masterOrderRx, orderTx, ackRx, quitChan)
 	go receiveOrder(orderRx, masterOrderRx, ackTx, quitChan)
-	go translatePeerUpdates(peerUpdateChan, unitUpdateChan, quitChan)
 	go broadcastExtLights(masterLightsTx, lightsTx, quitChan)
 
 }
 
-func Passive(masterBackupChan chan [][]MasterOrder, unitUpdateChan chan UnitUpdate, quitChan chan bool) {
+func Passive(masterBackupChan chan [][]MasterOrder, quitChan chan bool) {
 
-	peerUpdateChan := make(chan peers.PeerUpdate, 100)
-
-	//Receive Backup
 	go bcast.Receiver(txPort, quitChan, masterBackupChan)
 
-	// Call and poll network for units
-	go peers.Transmitter(peersComPort, id+":"+MASTER, quitChan)
-	go peers.Receiver(peersComPort, peerUpdateChan, quitChan)
-	go translatePeerUpdates(peerUpdateChan, unitUpdateChan, quitChan)
 }
 
 func receiveStatus(masterStatusRx chan StatusType, statusRx chan StatusType, quitChan <-chan bool) {
@@ -93,7 +79,6 @@ func receiveStatus(masterStatusRx chan StatusType, statusRx chan StatusType, qui
 			fmt.Println("Quitting receiveStatus")
 			return
 
-		//Handling the received statuses.
 		case status := <-statusRx:
 			if status.ID > lastID || status.ID == 0 {
 				masterStatusRx <- status
@@ -161,7 +146,6 @@ func sendOrder(masterOrderTx chan OrderType, masterOrderRx chan OrderType, order
 			}
 			orderTx <- order
 
-			// While we wait for acknowledge from Elevator:
 			timeout := time.After(timeOutTime)
 			resend := time.NewTicker(resendTime)
 
@@ -169,6 +153,7 @@ func sendOrder(masterOrderTx chan OrderType, masterOrderRx chan OrderType, order
 
 				select {
 				case <-timeout:
+					fmt.Println("Sending Order Timed Out..")
 					sending = false
 					order.To = ""
 					masterOrderRx <- order
@@ -195,17 +180,14 @@ func receiveOrder(orderRx chan OrderType, masterOrderRx chan OrderType, ackTx ch
 			fmt.Println("Quitting receiveOrder!")
 			return
 		case order = <-orderRx:
-			fmt.Println("Got order:", order)
 
 			if order.To != "" {
-				fmt.Println("Breaking!")
 				break
 			}
 
 			ack.To = order.From
 			ack.From = id
 			ackTx <- ack
-			fmt.Println("Sent Ack", ack)
 
 			masterOrderRx <- order
 		}
@@ -225,10 +207,9 @@ func broadcastExtLights(masterLightsTx chan [][]bool, lightsTx chan [][]bool, qu
 		case <-t.C:
 			if len(lights) > 1 {
 				lightsTx <- lights
-				//fmt.Println("Sending Lights:", lights)
+
 			}
 		case lights = <-masterLightsTx:
-			//fmt.Println("Got LightUpdate", lights)
 		}
 	}
 }

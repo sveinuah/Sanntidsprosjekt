@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"master/masternetworkinterface"
-	//"master/testmaster"
 	"runtime"
 	"sync"
 	"time"
@@ -13,7 +12,7 @@ import (
 
 const (
 	masterSyncInterval = 100 * time.Millisecond
-	initWaitTime       = 3 // in seconds
+	initWaitTime       = 3 * time.Second
 	reportInterval     = 2 // in seconds
 
 	stateGoActive  int = 0
@@ -32,11 +31,17 @@ var id string
 var numFloors int
 var units typedef.UnitUpdate
 var orderList [][]typedef.MasterOrder
+var elevReports = make(map[string]typedef.StatusType)
 
 var unitMutex = &sync.Mutex{}
+var reportMutex = &sync.Mutex{}
 
 func main() {
-	initialize()
+	flag.StringVar(&id, "id", "", "The master ID")
+	flag.Parse()
+
+	fmt.Println("My ID:", id)
+	fmt.Println("Master Initializing!")
 
 	var state int
 	var lastState int
@@ -46,8 +51,19 @@ func main() {
 	quitChan := make(chan bool)
 	doneChan := make(chan bool)
 
+	closeChan := make(chan bool)
+	newSlaveChan := make(chan typedef.UnitType, 10)
+
+	runtime.GOMAXPROCS(runtime.NumCPU())
+
+	go handleUnits(id, newSlaveChan, closeChan)
+
+	initialSync()
+
+	fmt.Println("Choosing master mode...")
+
 	if checkIfActive() {
-		go active(syncChan, doneChan, quitChan)
+		go active(syncChan, newSlaveChan, doneChan, quitChan)
 		fmt.Println("Going Active")
 		lastState = stateActive
 	} else {
@@ -55,6 +71,8 @@ func main() {
 		fmt.Println("Going passive")
 		lastState = statePassive
 	}
+
+	time.Sleep(250 * time.Millisecond)
 
 	for {
 		state = getState(lastState)
@@ -68,19 +86,17 @@ func main() {
 		case statePassive:
 			select {
 			case orderList = <-syncChan:
-				fmt.Println("Getting backup")
 			default:
 			}
 			lastState = statePassive
 		case stateGoActive:
 			quitChan <- true
-			go active(syncChan, doneChan, quitChan)
+			go active(syncChan, newSlaveChan, doneChan, quitChan)
 			fmt.Println("Going Active")
 			fallthrough
 		case stateActive:
 			select {
 			case <-syncTimer.C:
-				fmt.Println("Syncing")
 				syncChan <- orderList
 			default:
 			}
@@ -88,6 +104,7 @@ func main() {
 		case stateQuit:
 			fmt.Println("Quitting")
 			close(quitChan)
+			close(closeChan)
 			return
 		default:
 			time.Sleep(masterSyncInterval)
@@ -95,34 +112,22 @@ func main() {
 	}
 }
 
-// passive updates unit list
-// It starts the passive routine in the network interface.
+// passive starts the passive routine in the network interface.
 // It terminates them when something is received on the quit channel.
 func passive(sync chan [][]typedef.MasterOrder, quitChan chan bool) {
-	unitChan := make(chan typedef.UnitUpdate, 1)
 	subQuit := make(chan bool)
 
-	masternetworkinterface.Passive(sync, unitChan, subQuit)
+	masternetworkinterface.Passive(sync, subQuit)
 
-	for {
-		select {
-		case update := <-unitChan:
-			unitMutex.Lock()
-			units = update
-			unitMutex.Unlock()
-			fmt.Println("Got Units", units)
-		case <-quitChan:
-			close(subQuit)
-			fmt.Println("Aborting passive go-routine")
-			return
-		}
-	}
+	<-quitChan
+	close(subQuit)
+	fmt.Println("Aborting passive go-routine")
 }
 
-// active updates unit list, requests and handles received reports
-// It starts the active routine in the network interface, and the order handling go-routine.
+// active requests and handles received reports, as well as handling orders
+// It starts the active routine in the network interface.
 // It terminates when something is received on the quit channel.
-func active(sync chan [][]typedef.MasterOrder, done chan bool, quitChan chan bool) {
+func active(sync chan [][]typedef.MasterOrder, newSlaveChan <-chan typedef.UnitType, done chan bool, quitChan chan bool) {
 
 	fmt.Println("Orderhandling started!")
 	var externalLights = make([][]bool, numFloors, numFloors)
@@ -130,45 +135,35 @@ func active(sync chan [][]typedef.MasterOrder, done chan bool, quitChan chan boo
 		externalLights[i] = make([]bool, 2, 2)
 	}
 
-	elevReports := make(map[string]typedef.StatusType)
-
 	statusChan := make(chan typedef.StatusType, 100)
-	unitChan := make(chan typedef.UnitUpdate, 100)
 	orderRx := make(chan typedef.OrderType, 100)
 	orderTx := make(chan typedef.OrderType, 100)
 	lightChan := make(chan [][]bool, 10)
 	subQuit := make(chan bool)
 
-	masternetworkinterface.Active(unitChan, orderTx, orderRx, sync, statusChan, lightChan, subQuit)
+	masternetworkinterface.Active(orderTx, orderRx, sync, statusChan, lightChan, subQuit)
 
 	for {
 		select {
-		case update := <-unitChan:
-			fmt.Println("what?")
-			unitMutex.Lock()
-			units = update
-			unitMutex.Unlock()
-			fmt.Println("Got Units", units)
-
-			//If elevator returns to active: clear its ext orders and set its int orders according to backup
-			//Not dealing with lights atm...
-			if units.New.Type == typedef.SLAVE {
-				for unitID, report := range elevReports {
-					if units.New.ID == unitID {
-						var order = typedef.OrderType{unitID, id, 0, typedef.DIR_NODIR, true}
-						for floor := 0; floor < numFloors; floor++ {
-							if report.MyOrders[floor][typedef.DIR_NODIR] == true {
-								order.Floor = floor
-								orderTx <- order
-							}
+		case unit := <-newSlaveChan:
+			if unit.Type == typedef.SLAVE {
+				report, foundKey := elevReports[unit.ID]
+				if foundKey {
+					var order = typedef.OrderType{unit.ID, id, 0, typedef.DIR_NODIR, true}
+					for floor := 0; floor < numFloors; floor++ {
+						if report.MyOrders[floor][typedef.DIR_NODIR] == true {
+							order.Floor = floor
+							orderTx <- order
 						}
 					}
 				}
 			}
 
 		case report := <-statusChan:
-			//fmt.Println("Got report")
+			reportMutex.Lock()
 			elevReports[report.From] = report
+			reportMutex.Unlock()
+
 		case <-quitChan:
 			close(subQuit)
 			fmt.Println("aborting active routine")
@@ -176,7 +171,6 @@ func active(sync chan [][]typedef.MasterOrder, done chan bool, quitChan chan boo
 			done <- true
 			return
 		case order := <-orderRx:
-			fmt.Println("Order:", order)
 			handleReceivedOrder(order, externalLights)
 			lightChan <- externalLights
 		default:
@@ -184,7 +178,7 @@ func active(sync chan [][]typedef.MasterOrder, done chan bool, quitChan chan boo
 				for j, order := range orderList[i] {
 					diff := time.Now().Sub(order.Estimated)
 					if order.Order.To == "" && order.Order.From != "" || (int(diff) > 0 && !order.Estimated.IsZero()) {
-						to, estim := findSuitedSlave(elevReports, order) // 2 sek pr etasje + 2 sek pr stop + leeway
+						to, estim := findSuitedSlave(order)
 						if to != id {
 							fmt.Println("To:", to)
 							orderList[i][j].Order.To = to
@@ -199,28 +193,15 @@ func active(sync chan [][]typedef.MasterOrder, done chan bool, quitChan chan boo
 	}
 }
 
-// Help functions below  :)
-func fillDoneChan(doneChan chan bool) {
-	doneChan <- true
-}
-
 // initialize uses the network interface to find other Masters/Slaves and get synchronization data.
 // terminates initiated go-routines after it is finished.
-func initialize() {
-	flag.StringVar(&id, "id", "", "The master ID")
-	flag.Parse()
-
-	runtime.GOMAXPROCS(runtime.NumCPU())
-
-	fmt.Println("My ID:", id)
-
-	fmt.Println("Master Initializing!")
+func initialSync() {
 
 	quitChan := make(chan bool)
 	syncChan := make(chan [][]typedef.MasterOrder, 5)
 	unitChan := make(chan typedef.UnitUpdate, 5)
 
-	numFloors = masternetworkinterface.Init_MNI(id, syncChan, unitChan, quitChan)
+	numFloors = masternetworkinterface.Init_MNI(syncChan, quitChan)
 
 	fmt.Println("Got", numFloors, "Floors")
 
@@ -229,7 +210,7 @@ func initialize() {
 		orderList[i] = make([]typedef.MasterOrder, 2, 2)
 	}
 
-	timeOut := time.After(initWaitTime * time.Second)
+	timeOut := time.After(initWaitTime)
 
 	done := false
 	for done != true {
@@ -238,12 +219,11 @@ func initialize() {
 		case update := <-unitChan:
 			units = update
 		case <-timeOut:
+			close(quitChan)
 			done = true
 		}
 	}
-
-	close(quitChan)
-	time.Sleep(1000 * time.Millisecond)
+	time.Sleep(250 * time.Millisecond)
 	fmt.Println("Done Initializing Master!")
 }
 
@@ -274,31 +254,28 @@ func checkIfActive() bool {
 	return true
 }
 
-// handleOrders adds all new orders sent to "", to the order list.
-// receiving a false order, means that it is executed by an elevator.
+// handleReceivedOrder adds valid new orders to the global order list.
+// receiving an order with New == false, means that it is executed by an elevator.
 // This function writes to the global orderList and the given Light matrix.
 func handleReceivedOrder(o typedef.OrderType, lights [][]bool) {
 	if o.New {
 		if orderList[o.Floor][o.Dir].Order.From == id && o.From != id {
 			return
 		}
-		fmt.Println("Addmin order")
 		orderList[o.Floor][o.Dir] = typedef.MasterOrder{Order: o}
 		lights[o.Floor][o.Dir] = true
 		return
 	}
-	fmt.Println("Deleting order")
-	orderList[o.Floor][o.Dir] = typedef.MasterOrder{} //clear order
+	orderList[o.Floor][o.Dir] = typedef.MasterOrder{}
 	(lights)[o.Floor][o.Dir] = false
 }
 
 // findAppropriate provides a cost function to find which slave is best suited for the order
 // It calculates an estimate for when the order should be finished.
 // This function reads from global values.
-func findSuitedSlave(reports map[string]typedef.StatusType, o typedef.MasterOrder) (string, time.Time) {
+func findSuitedSlave(o typedef.MasterOrder) (string, time.Time) {
 	cost := 10000 //high number
 	chosenUnit := id
-	//Mutex is not the problem
 	unitMutex.Lock()
 	tempUnits := make([]typedef.UnitType, len(units.Peers))
 	for i, unit := range units.Peers {
@@ -307,7 +284,9 @@ func findSuitedSlave(reports map[string]typedef.StatusType, o typedef.MasterOrde
 	unitMutex.Unlock()
 
 	for _, unit := range tempUnits {
-		report := reports[unit.ID]
+		reportMutex.Lock()
+		report := elevReports[unit.ID]
+		reportMutex.Unlock()
 
 		if unit.Type == typedef.SLAVE && report.From != "" {
 			tempCost := 0
@@ -441,4 +420,29 @@ func findSuitedSlave(reports map[string]typedef.StatusType, o typedef.MasterOrde
 	}
 	cost += estimateBuffer
 	return chosenUnit, time.Now().Add(time.Duration(cost) * time.Second) //This should be returned
+}
+
+func handleUnits(id string, newSlaveChan chan<- typedef.UnitType, quitChan chan bool) {
+	unitUpdateChan := make(chan typedef.UnitUpdate)
+
+	fmt.Println("Starting handleUnits!")
+
+	masternetworkinterface.Peers(id, unitUpdateChan, quitChan)
+
+	for {
+		select {
+		case update := <-unitUpdateChan:
+			unitMutex.Lock()
+			units = update
+			unitMutex.Unlock()
+			fmt.Println("Got Units", units)
+
+			if update.New.ID != "" {
+				newSlaveChan <- update.New
+			}
+		case <-quitChan:
+			fmt.Println("Quitting handleUnits!")
+			return
+		}
+	}
 }

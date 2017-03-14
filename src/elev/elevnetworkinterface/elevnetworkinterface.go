@@ -22,13 +22,7 @@ const peersComPort = 40014
 var cMutex = &sync.Mutex{}
 
 func Start(ID string, quitChan chan bool, allocateOrdersChan chan OrderType, executedOrdersChan chan OrderType, extLightsChan chan [][]bool, setLightsChan chan OrderType, buttonPressesChan chan OrderType, elevStatusChan chan StatusType) {
-	fmt.Println("elevnet Init!")
-	/*
-		- absorb Status messages
-		- pick up executed orders, if timeout, bounce back to BI
-		- pick up button presses, if timeout, bounce back to setLights and allocateOrders
-		- make extLights matrix and pass along
-	*/
+	fmt.Println("Starting Elevator network interface!")
 
 	id = ID
 
@@ -91,10 +85,10 @@ func transmitOrder(buttonPressChan chan OrderType, executedOrdersChan chan Order
 
 		order.From = id
 
-		for len(ackRx) > 0 {
+		/*for len(ackRx) > 0 {
 			fmt.Println(len(ackRx))
 			<-ackRx
-		}
+		}*/
 		orderTx <- order
 
 		timeout := time.After(TIMOUT_TIME)
@@ -108,10 +102,8 @@ func transmitOrder(buttonPressChan chan OrderType, executedOrdersChan chan Order
 					setLightsChan <- order
 				}
 			case ack := <-ackRx:
-				fmt.Println("Got Any Ack..")
 				if ack.To == id {
 					sending = false
-					fmt.Println("Got Ack! :D")
 				}
 			case <-resend.C:
 				orderTx <- order
@@ -130,7 +122,7 @@ func receiveOrder(allocateOrdersChan chan OrderType, setLightsChan chan OrderTyp
 			return
 		case order := <-orderRx:
 			if order.To == id {
-				fmt.Println(id, " received order", order)
+				fmt.Println(id, "received order", order)
 				ack.To = order.From
 				ackTx <- ack
 				allocateOrdersChan <- order
