@@ -197,13 +197,15 @@ func clearOrder(executedOrdersChan chan<- OrderType, setLightsChan chan<- OrderT
 	clearOrder.Dir = status.Direction
 	clearOrder.New = false
 
-	setLightsChan <- clearOrder
-	status.MyOrders[status.CurrentFloor][status.Direction] = false //Clear status.MyOrders from list
-
-	//If external order: Report to master and clear internal order aswell
-	if status.Direction != DIR_NODIR {
+	switch {
+	case status.Direction != DIR_NODIR:
 		executedOrdersChan <- clearOrder
+		status.MyOrders[status.CurrentFloor][status.Direction] = false //Clear status.MyOrders from list
+
+		//If external order: Report to master and clear internal order aswell
 		clearOrder.Dir = DIR_NODIR
+		fallthrough
+	default:
 		setLightsChan <- clearOrder
 		status.MyOrders[status.CurrentFloor][DIR_NODIR] = false
 	}

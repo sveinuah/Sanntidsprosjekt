@@ -2,7 +2,6 @@ package typedef
 
 import "time"
 
-// OrderType haha test lol.
 type OrderType struct {
 	To    string
 	From  string
@@ -11,20 +10,17 @@ type OrderType struct {
 	New   bool
 }
 
-// MasterOrder skal.
 type MasterOrder struct {
 	Order     OrderType
 	Estimated time.Time
 }
 
-// UnitUpdate skal.
 type UnitUpdate struct {
 	Peers []UnitType
 	New   UnitType
 	Lost  []UnitType
 }
 
-// StatusType o.O
 type StatusType struct {
 	From         string
 	ID           int
@@ -35,21 +31,16 @@ type StatusType struct {
 	DoorOpen     bool
 }
 
-// UnitType shiiiet!
 type UnitType struct {
 	Type string
 	ID   string
 }
 
-// AckType .You say AckType?
 type AckType struct { //Jeg vil at du skal ha denne i nettwork Interface --Schwung
 	To   string
 	From string
-	Type string
-	ID   int
 }
 
-// ElevError is cool!
 type ElevError struct {
 	errCode int
 	errStr  string
@@ -57,7 +48,6 @@ type ElevError struct {
 
 func (e ElevError) Error() string { return e.errStr }
 
-// ErrorCode must
 func (e ElevError) ErrorCode() int { return e.errCode }
 
 const (

@@ -2,13 +2,9 @@ package main
 
 import (
 	"elev/elevdriver"
-	//"elev/dummyheis"
-	. "typedef"
-	//"log"
 	"elev/elevnetworkinterface"
 	"flag"
-	"fmt"
-	//"time"
+	. "typedef"
 )
 
 var id string
@@ -28,9 +24,7 @@ func main() {
 
 	go elevdriver.Drive(quitChan, allocateOrdersChan, executedOrdersChan, elevStatusChan, setLightsChan, initChan)
 	go elevdriver.ButtonInterface(quitChan, extLightsChan, setLightsChan, buttonPressesChan, allocateOrdersChan, initChan)
-	//go dummyheis.DummyHeis(quitChan, allocateOrdersChan, executedOrdersChan, extLightsChan, setLightsChan, buttonPressesChan, elevStatusChan)
 	elevnetworkinterface.Start(id, quitChan, allocateOrdersChan, executedOrdersChan, extLightsChan, setLightsChan, buttonPressesChan, elevStatusChan)
 
-	fmt.Println("Evig comhandler")
 	<-quitChan
 }
