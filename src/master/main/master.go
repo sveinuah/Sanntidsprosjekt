@@ -219,8 +219,9 @@ func handleUnits(id string, newSlaveChan chan<- UnitType, quitChan chan bool) {
 	}
 }
 
-// initialize uses the network interface to find other Masters/Slaves and get synchronization data.
-// terminates initiated go-routines after it is finished.
+// initialSync uses the network interface to find other Masters/Slaves and get synchronization data.
+// It also allocates memory for the global order list, based on the number of floors received from Init_MNI.
+// It terminates initiated go-routines after timeout is received.
 func initialSync() {
 
 	quitChan := make(chan bool)
@@ -251,7 +252,6 @@ func initialSync() {
 }
 
 func getState(lastState int) int {
-	// get and return stateQuit when quit flag is raised NYI
 	if checkIfActive() {
 		if lastState == stateActive {
 			return stateActive
@@ -263,7 +263,8 @@ func getState(lastState int) int {
 	return stateGoPassive
 }
 
-// This function reads from the global variable units
+// checkIfActive reads from the global variable units.
+// It uses the mutex unitMutex to prevent race conditions.
 func checkIfActive() bool {
 	unitMutex.Lock()
 	defer unitMutex.Unlock()
@@ -293,10 +294,9 @@ func handleReceivedOrder(o OrderType, lights [][]bool) {
 	(lights)[o.Floor][o.Dir] = false
 }
 
-// findAppropriate provides a cost function to find which slave is best suited for the order
+// findSuitedSlave provides a cost function to find which slave is best suited for the order
 // It calculates an estimate for when the order should be finished.
-// This function reads from global values.
-
+// This function reads from global values, and uses the mutexes unitMutex and reportMutex.
 func findSuitedSlave(o MasterOrder) (string, time.Time) {
 	cost := 10000 //high number
 	chosenUnit := id
@@ -325,7 +325,7 @@ func findSuitedSlave(o MasterOrder) (string, time.Time) {
 		reportFloor := report.CurrentFloor
 		reportDir := report.Direction
 
-		// If the order is already delegated to the elevator, it means that it has reached the timeout
+		// If the order is already delegated to an elevator, it means that it has reached the timeout
 		if report.MyOrders[orderFloor][orderDir] {
 			tempCost += timeOutCost
 		}

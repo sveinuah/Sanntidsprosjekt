@@ -12,6 +12,7 @@ import (
 
 // Encodes received values from `chans` into type-tagged JSON, then broadcasts
 // it on `port`
+// The code is changed to terminate if a channel is closed.
 func Transmitter(port int, chans ...interface{}) {
 	checkArgs(chans...)
 
@@ -44,6 +45,7 @@ func Transmitter(port int, chans ...interface{}) {
 
 // Matches type-tagged JSON received on `port` to element types of `chans`, then
 // sends the decoded value on the corresponding channel
+// It terminates if something is received on the quit channel.
 func Receiver(port int, quitChan chan bool, chans ...interface{}) {
 	checkArgs(chans...)
 
