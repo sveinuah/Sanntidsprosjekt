@@ -33,6 +33,8 @@ func Peers(identity string, unitUpdateChan chan UnitUpdate, quitChan chan bool) 
 	go translatePeerUpdates(peerUpdateChan, unitUpdateChan, quitChan)
 }
 
+// Init_MNI waits for one status update.
+// It returns the number of floors the elevator reports.
 func Init_MNI(masterBackupChan chan [][]MasterOrder, quitChan chan bool) int {
 	fmt.Println("Network interface initializing..")
 
@@ -66,12 +68,15 @@ func Active(masterOrderTx chan OrderType, masterOrderRx chan OrderType, masterBa
 
 }
 
+// Passive starts the neccessary go-routines for Passive master mode
 func Passive(masterBackupChan chan [][]MasterOrder, quitChan chan bool) {
 
 	go bcast.Receiver(txPort, quitChan, masterBackupChan)
 
 }
 
+// receiveStatus should be run as a go-routine.
+// It terminates when something is received on the quit channel.
 func receiveStatus(masterStatusRx chan StatusType, statusRx chan StatusType, quitChan <-chan bool) {
 	var lastID int
 
@@ -89,6 +94,9 @@ func receiveStatus(masterStatusRx chan StatusType, statusRx chan StatusType, qui
 	}
 }
 
+// translatePeerUpdates changes the peers.PeerUpdate type to typedef.UnitUpdate and transmits this update to the master.
+// It should be run as a go-routine.
+// It terminates when something is received on the quit channel.
 func translatePeerUpdates(peerUpdateChan chan peers.PeerUpdate, unitUpdateChan chan UnitUpdate, quitChan chan bool) {
 	var newPeerUpdate peers.PeerUpdate
 	var newUnitUpdate UnitUpdate
@@ -125,6 +133,10 @@ func translatePeerUpdates(peerUpdateChan chan peers.PeerUpdate, unitUpdateChan c
 	}
 }
 
+// sendOrder transmits an order from the master. If timeOut is reached before it receives an acknowledge,
+// the order is bounced back to the master as a new order to: "" from: <mastername>. 
+// It should be run as a go-routine.
+// It terminates when something is received on the quit channel.
 func sendOrder(masterOrderTx chan OrderType, masterOrderRx chan OrderType, orderTx chan OrderType, ackRx chan AckType, quitChan chan bool) {
 	var order OrderType
 	var sending bool
@@ -175,6 +187,9 @@ func sendOrder(masterOrderTx chan OrderType, masterOrderRx chan OrderType, order
 	}
 }
 
+// receiveOrder channels received orders to the master and sends one ack per order received.
+// It should be run as a go-routine.
+// It terminates when something is received on the quit channel.
 func receiveOrder(orderRx chan OrderType, masterOrderRx chan OrderType, ackTx chan AckType, quitChan chan bool) {
 	var order OrderType
 	var ack AckType
@@ -197,6 +212,10 @@ func receiveOrder(orderRx chan OrderType, masterOrderRx chan OrderType, ackTx ch
 	}
 }
 
+// broadcastExtLights transmits a 2D array of the order button lights each timestep, decided by the global variable lightResendTime.
+// the array is updated by the master.
+// It should be run as a go-routine.
+// It terminates when something is received on the quit channel.
 func broadcastExtLights(masterLightsTx chan [][]bool, lightsTx chan [][]bool, quitChan chan bool) {
 	var lights [][]bool
 	t := time.NewTicker(lightResendTime)

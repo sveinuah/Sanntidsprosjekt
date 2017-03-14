@@ -21,6 +21,7 @@ const peersComPort = 40014
 
 var cMutex = &sync.Mutex{}
 
+// Start ititializes the network module and distributes the channels acordingly.
 func Start(ID string, quitChan chan bool, allocateOrdersChan chan OrderType, executedOrdersChan chan OrderType, extLightsChan chan [][]bool, setLightsChan chan OrderType, buttonPressesChan chan OrderType, elevStatusChan chan StatusType) {
 	fmt.Println("Starting Elevator network interface!")
 
@@ -45,6 +46,9 @@ func Start(ID string, quitChan chan bool, allocateOrdersChan chan OrderType, exe
 	go receiveExtLights(extLightsRx, extLightsChan, quitChan)
 }
 
+// transmitStatus sends the status report from the elevator.
+// It should be run as a go-routine.
+// It terminates when something is received from the uit channel.
 func transmitStatus(statusTx chan StatusType, elevStatusChan chan StatusType, quitChan chan bool) {
 	var status StatusType
 	var counter int = 0
@@ -64,6 +68,10 @@ func transmitStatus(statusTx chan StatusType, elevStatusChan chan StatusType, qu
 	}
 }
 
+// transmitOrder sends gatheres orders from two channels and transmits them on one.
+// if no ack is received within timeOut, if the order was an executed order. The order light is cleared.
+// It should be run as a go-routine.
+// it terminates if something is received on the quit channel.
 func transmitOrder(buttonPressChan chan OrderType, executedOrdersChan chan OrderType, setLightsChan chan OrderType, orderTx chan OrderType, ackRx chan AckType, quitChan chan bool) {
 	var order OrderType
 	var sending bool
@@ -114,6 +122,9 @@ func transmitOrder(buttonPressChan chan OrderType, executedOrdersChan chan Order
 	}
 }
 
+// receiveOrder sends incomming orders to the elevator and sends an Acknowledge to the master that sent the order.
+// It should be run to as a go-routine.
+// It terminates if something is received on the
 func receiveOrder(allocateOrdersChan chan OrderType, setLightsChan chan OrderType, orderRx chan OrderType, ackTx chan AckType, quitChan chan bool) {
 	var ack AckType
 	ack.From = id
@@ -137,6 +148,8 @@ func receiveOrder(allocateOrdersChan chan OrderType, setLightsChan chan OrderTyp
 	}
 }
 
+// receiveExtLights should be run as a go-routine
+// it terminates when something is received on the quit channel.
 func receiveExtLights(extLightsRx chan [][]bool, extLightsChan chan [][]bool, quitChan chan bool) {
 	var extLights [][]bool
 	for {
